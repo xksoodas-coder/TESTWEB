@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigWebStore - المنتجات</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="top-bar" hidden>
+        <span class="top-bar-text"></span>
+    </div>
+
+    <header class="main-header">
+        <div class="header-container">
+            <div class="header-left">
+                <button class="icon-btn search-btn" id="searchBtn" aria-label="بحث">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+                <a href="cart.html" class="icon-btn cart-btn" aria-label="السلة">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="9" cy="21" r="1"></circle>
+                        <circle cx="20" cy="21" r="1"></circle>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                    </svg>
+                    <span class="cart-badge" id="cartBadge">0</span>
+                </a>
+            </div>
+
+            <nav class="main-nav">
+                <a href="contact.html">اتصل بنا</a>
+                <a href="categories.html" class="active">التصنيفات</a>
+                <a href="index.html">الواجهة الرئيسية</a>
+            </nav>
+
+            <div class="header-right">
+                <a href="index.html" class="logo">
+                    <div class="logo-circle">
+                        <span>BS</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="search-panel" id="searchPanel">
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="ابحث عن منتج أو تصنيف...">
+            <button class="search-close" id="searchClose">إغلاق</button>
+        </div>
+    </div>
+
+    <section class="page-title-section">
+        <h1 class="page-title" id="productsPageTitle">المنتجات</h1>
+        <p class="page-subtitle" id="productsPageSubtitle">اختر منتجًا للإضافة إلى السلة</p>
+        <div class="title-divider"></div>
+        <a href="categories.html" class="back-link">→ العودة إلى التصنيفات</a>
+    </section>
+
+    <section class="content-section">
+        <div class="products-grid" id="productsGrid">
+            <!-- Products loaded by JS -->
+        </div>
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <p>لا توجد منتجات في هذا التصنيف حاليًا.</p>
+        </div>
+    </section>
+
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-col">
+                <div class="footer-logo">
+                    <div class="logo-circle small"><span>BS</span></div>
+                    <span class="footer-brand">BigWebStore</span>
+                </div>
+                <p class="footer-copy">© 2026 BigWebStore. جميع الحقوق محفوظة.</p>
+            </div>
+            <div class="footer-col">
+                <h4>روابط سريعة</h4>
+                <ul>
+                    <li><a href="index.html">الواجهة الرئيسية</a></li>
+                    <li><a href="categories.html">التصنيفات</a></li>
+                    <li><a href="contact.html">اتصل بنا</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>الحساب</h4>
+                <ul>
+                    <li><a href="cart.html">سلة المشتريات</a></li>
+                    <li><a href="admin-login.html">دخول الإدارة</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>تواصل معنا</h4>
+                <ul>
+                    <li>الهاتف: +213 000 000 000</li>
+                    <li>البريد: contact@bigwebstore.dz</li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+    <script src="data.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

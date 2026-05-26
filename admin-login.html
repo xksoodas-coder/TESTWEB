@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigWebStore - دخول الإدارة</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-body">
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="logo-circle"><span>BS</span></div>
+            </div>
+            <h1>دخول الإدارة</h1>
+            <p class="login-subtitle">BigWebStore Admin Panel</p>
+
+            <form id="loginForm" class="admin-form">
+                <div class="form-group">
+                    <label for="username">اسم المستخدم</label>
+                    <input type="text" id="username" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">كلمة المرور</label>
+                    <input type="password" id="password" autocomplete="current-password" required>
+                </div>
+                <div class="login-error" id="loginError" hidden>
+                    بيانات الدخول غير صحيحة
+                </div>
+                <button type="submit" class="primary-btn login-btn">دخول</button>
+            </form>
+
+            <p class="login-hint">
+                للاختبار: <code>admin / admin</code>
+            </p>
+
+            <a href="index.html" class="back-link">→ العودة إلى المتجر</a>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

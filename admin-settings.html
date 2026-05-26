@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigWebStore - الإعدادات</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-body">
+    <header class="admin-header">
+        <div class="admin-header-container">
+            <div class="admin-brand">
+                <div class="logo-circle small"><span>BS</span></div>
+                <span>لوحة الإدارة</span>
+            </div>
+            <nav class="admin-nav">
+                <a href="admin-dashboard.html">لوحة التحكم</a>
+                <a href="admin-categories.html">إدارة التصنيفات</a>
+                <a href="admin-users.html">المستخدمون</a>
+                <a href="admin-settings.html" class="active">الإعدادات</a>
+                <a href="index.html">عرض المتجر</a>
+            </nav>
+            <button class="logout-btn" id="logoutBtn">خروج</button>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <h1 class="admin-title">الإعدادات العامة</h1>
+        <p class="admin-subtitle muted">
+            تحكم في مظهر الموقع، نص الشريط العلوي، وطريقة عرض السلة للزبائن.
+        </p>
+
+        <form id="settingsForm">
+            <!-- Theme colors -->
+            <div class="admin-card">
+                <h2>ألوان الموقع</h2>
+                <p class="muted" style="margin-bottom:18px;font-size:13px">
+                    اختر الألوان التي تظهر في الشريط العلوي، الأزرار، وعناصر التمييز.
+                </p>
+
+                <div class="settings-grid">
+                    <div class="color-field">
+                        <label for="primary">اللون الرئيسي</label>
+                        <div class="color-input-wrap">
+                            <input type="color" id="primary">
+                            <input type="text" id="primaryHex" class="admin-input hex-input">
+                        </div>
+                    </div>
+                    <div class="color-field">
+                        <label for="primaryDark">اللون الداكن</label>
+                        <div class="color-input-wrap">
+                            <input type="color" id="primaryDark">
+                            <input type="text" id="primaryDarkHex" class="admin-input hex-input">
+                        </div>
+                    </div>
+                    <div class="color-field">
+                        <label for="primaryLight">اللون الفاتح</label>
+                        <div class="color-input-wrap">
+                            <input type="color" id="primaryLight">
+                            <input type="text" id="primaryLightHex" class="admin-input hex-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="color-preview">
+                    <span>معاينة:</span>
+                    <span class="preview-chip" id="previewLight">فاتح</span>
+                    <span class="preview-chip" id="previewMain">رئيسي</span>
+                    <span class="preview-chip" id="previewDark">داكن</span>
+                </div>
+            </div>
+
+            <!-- Announcement bar -->
+            <div class="admin-card">
+                <h2>الشريط العلوي</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    النص الذي يظهر في أعلى الموقع للزبون. اتركه فارغًا لإخفاء الشريط.
+                </p>
+                <div class="form-group">
+                    <label for="announcement">نص الشريط</label>
+                    <input type="text" id="announcement" class="admin-input" placeholder="مثال: التوصيل السريع لكل ما تحتاج إليه عبر المتجر">
+                </div>
+            </div>
+
+            <!-- Site visibility -->
+            <div class="admin-card">
+                <h2>وصول الموقع</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    اختر إذا كان الموقع مفتوحًا للجميع أو خاص بعدد محدد من الزبائن
+                    يحتاجون تسجيل دخول. عندما يكون خاصًا، يجب على الادمين إنشاء حسابات
+                    الزبائن أولاً من صفحة <a href="admin-users.html">المستخدمين</a>.
+                </p>
+
+                <div class="cart-mode-options">
+                    <label class="cart-mode-card">
+                        <input type="radio" name="siteMode" value="public" id="siteModePublic">
+                        <div class="mode-preview">
+                            <div class="mode-mock mode-mock-public">
+                                <div class="mock-globe"></div>
+                            </div>
+                        </div>
+                        <div class="mode-info">
+                            <strong>موقع عام</strong>
+                            <p>أي زبون يستطيع تصفح المنتجات بدون تسجيل دخول.</p>
+                        </div>
+                    </label>
+
+                    <label class="cart-mode-card">
+                        <input type="radio" name="siteMode" value="private" id="siteModePrivate">
+                        <div class="mode-preview">
+                            <div class="mode-mock mode-mock-private">
+                                <div class="mock-lock"></div>
+                            </div>
+                        </div>
+                        <div class="mode-info">
+                            <strong>خاص بزبائن محددين</strong>
+                            <p>يتطلب اسم مستخدم وكلمة مرور ورمز متجر لدخول الموقع.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="store-id-hint">
+                    <strong>رمز المتجر الحالي:</strong>
+                    <code id="settingsStoreId">—</code>
+                    <p class="muted" style="font-size:12px;margin-top:6px">
+                        يتم استلامه تلقائيًا من نظام المزامنة (sync) الخاص بالحاسوب،
+                        ولا يمكن تعديله من هنا. هذا هو الرمز الذي يدخله الزبون عند تسجيل الدخول.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Cart display mode -->
+            <div class="admin-card">
+                <h2>عرض السلة</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    اختر كيف تظهر سلة المشتريات عند ضغط الزبون على أيقونة السلة.
+                </p>
+
+                <div class="cart-mode-options">
+                    <label class="cart-mode-card">
+                        <input type="radio" name="cartMode" value="page" id="cartModePage">
+                        <div class="mode-preview">
+                            <div class="mode-mock mode-mock-page">
+                                <div class="mock-header"></div>
+                                <div class="mock-body"></div>
+                            </div>
+                        </div>
+                        <div class="mode-info">
+                            <strong>صفحة كاملة</strong>
+                            <p>الضغط على السلة ينقل الزبون إلى صفحة مستقلة.</p>
+                        </div>
+                    </label>
+
+                    <label class="cart-mode-card">
+                        <input type="radio" name="cartMode" value="sidebar" id="cartModeSidebar">
+                        <div class="mode-preview">
+                            <div class="mode-mock mode-mock-sidebar">
+                                <div class="mock-page"></div>
+                                <div class="mock-sidebar"></div>
+                            </div>
+                        </div>
+                        <div class="mode-info">
+                            <strong>شريط جانبي</strong>
+                            <p>السلة تفتح كشريط منزلق دون الخروج من الصفحة الحالية.</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="primary-btn">حفظ الإعدادات</button>
+                <button type="button" class="ghost-btn" id="resetSettingsBtn">إعادة إلى الافتراضي</button>
+                <a href="index.html" target="_blank" class="ghost-btn">معاينة المتجر في تبويب جديد</a>
+            </div>
+        </form>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigWebStore - لوحة الإدارة</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-body">
+    <header class="admin-header">
+        <div class="admin-header-container">
+            <div class="admin-brand">
+                <div class="logo-circle small"><span>BS</span></div>
+                <span>لوحة الإدارة</span>
+            </div>
+            <nav class="admin-nav">
+                <a href="admin-dashboard.html" class="active">لوحة التحكم</a>
+                <a href="admin-categories.html">إدارة التصنيفات</a>
+                <a href="admin-users.html">المستخدمون</a>
+                <a href="admin-settings.html">الإعدادات</a>
+                <a href="index.html">عرض المتجر</a>
+            </nav>
+            <button class="logout-btn" id="logoutBtn">خروج</button>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <h1 class="admin-title">لوحة التحكم</h1>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">رمز المتجر</div>
+                <div class="stat-value" id="statStoreId" style="font-family:monospace;letter-spacing:2px;color:var(--primary)">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">إجمالي التصنيفات</div>
+                <div class="stat-value" id="statTotalCategories">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">عدد المستخدمين</div>
+                <div class="stat-value" id="statTotalUsers">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">وضع الوصول</div>
+                <div class="stat-value" id="statSiteMode" style="font-size:18px">—</div>
+            </div>
+        </div>
+
+        <div class="admin-card">
+            <h2>الإجراءات السريعة</h2>
+            <div class="quick-actions">
+                <a href="admin-categories.html" class="quick-action-btn">
+                    <span class="qa-icon">⚙</span>
+                    <span>إدارة التصنيفات</span>
+                </a>
+                <a href="admin-users.html" class="quick-action-btn">
+                    <span class="qa-icon">👤</span>
+                    <span>إدارة المستخدمين</span>
+                </a>
+                <a href="admin-settings.html" class="quick-action-btn">
+                    <span class="qa-icon">🎨</span>
+                    <span>الإعدادات</span>
+                </a>
+                <a href="index.html" class="quick-action-btn">
+                    <span class="qa-icon">👁</span>
+                    <span>معاينة المتجر</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="admin-card">
+            <h2>الربط مع الحاسوب</h2>
+            <p class="muted">
+                هذا الموقع جاهز حاليًا بواجهة محلية، وسيتم لاحقًا ربطه بقاعدة بيانات
+                Turso الخاصة بتطبيق DigiSoft للحصول على التصنيفات والمنتجات والكمية
+                المتاحة بشكل لحظي.
+            </p>
+        </div>
+    </main>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,778 @@
+/* ===== Admin Theme ===== */
+.admin-body {
+    background-color: #f1f3f6;
+}
+
+/* ----- Login page ----- */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-dark) 100%);
+    padding: 24px;
+}
+
+.login-card {
+    background-color: white;
+    width: 100%;
+    max-width: 380px;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+    text-align: center;
+}
+
+.login-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.login-logo .logo-circle {
+    background-color: var(--primary);
+    color: white;
+    width: 64px;
+    height: 64px;
+    font-size: 22px;
+}
+
+.login-card h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.login-subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+}
+
+.admin-form {
+    text-align: start;
+}
+
+.login-error {
+    background-color: rgba(192, 57, 43, 0.1);
+    color: var(--danger);
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+.login-btn {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+}
+
+.login-hint {
+    margin-top: 18px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.login-hint code {
+    background-color: var(--bg-light);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.login-card .back-link {
+    display: block;
+    margin-top: 18px;
+    font-size: 13px;
+}
+
+/* ----- Admin layout ----- */
+.admin-header {
+    background-color: #1f2937;
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.admin-header-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.admin-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.admin-brand .logo-circle {
+    background-color: var(--primary);
+    color: white;
+}
+
+.admin-nav {
+    display: flex;
+    gap: 22px;
+    flex: 1;
+    justify-content: center;
+}
+
+.admin-nav a {
+    color: #cdd5df;
+    font-size: 14px;
+    padding: 6px 4px;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.admin-nav a:hover {
+    color: white;
+}
+
+.admin-nav a.active {
+    color: white;
+}
+
+.admin-nav a.active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--primary);
+    border-radius: 2px;
+}
+
+.logout-btn {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: white;
+    padding: 7px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    transition: background-color 0.2s ease;
+}
+
+.logout-btn:hover {
+    background-color: var(--danger);
+}
+
+.admin-main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+}
+
+.admin-title {
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+
+.admin-subtitle {
+    margin-bottom: 22px;
+    font-size: 14px;
+}
+
+.muted {
+    color: var(--text-muted);
+}
+
+.admin-card {
+    background-color: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 22px;
+}
+
+.admin-card h2 {
+    font-size: 17px;
+    margin-bottom: 14px;
+}
+
+/* ----- Stats ----- */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 26px;
+}
+
+.stat-card {
+    background-color: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+}
+
+.stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.stat-value.sync-status {
+    font-size: 18px;
+    color: var(--danger);
+}
+
+/* ----- Quick actions ----- */
+.quick-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.quick-action-btn {
+    background-color: var(--bg-light);
+    color: var(--text-dark);
+    padding: 12px 18px;
+    border-radius: var(--radius);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+}
+
+.quick-action-btn:hover {
+    background-color: white;
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.qa-icon {
+    font-size: 18px;
+}
+
+/* ----- Toolbar ----- */
+.admin-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.admin-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+}
+
+.admin-input:focus {
+    border-color: var(--primary);
+}
+
+.ghost-btn {
+    padding: 9px 16px;
+    background-color: white;
+    color: var(--text-dark);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ghost-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* ----- Table ----- */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 12px 14px;
+    text-align: start;
+    border-bottom: 1px solid var(--border);
+}
+
+.admin-table th {
+    background-color: var(--bg-light);
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.admin-table tbody tr:hover {
+    background-color: var(--bg-light);
+}
+
+.status-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-pill.visible {
+    background-color: rgba(46, 139, 87, 0.12);
+    color: var(--success);
+}
+
+.status-pill.hidden {
+    background-color: rgba(192, 57, 43, 0.12);
+    color: var(--danger);
+}
+
+/* ----- Toggle switch ----- */
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+}
+
+.toggle-track {
+    position: relative;
+    width: 42px;
+    height: 22px;
+    background-color: #cdd5df;
+    border-radius: 11px;
+    transition: background-color 0.2s ease;
+}
+
+.toggle-track::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: white;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+
+.toggle-switch.on .toggle-track {
+    background-color: var(--primary);
+}
+
+.toggle-switch.on .toggle-track::before {
+    transform: translateX(-20px);
+}
+
+.toggle-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ----- Settings page ----- */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin-bottom: 20px;
+}
+
+.color-field label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-dark);
+}
+
+.color-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.color-input-wrap input[type="color"] {
+    width: 44px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2px;
+    background-color: white;
+    cursor: pointer;
+}
+
+.hex-input {
+    flex: 1;
+    text-transform: uppercase;
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+.color-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px;
+    background-color: var(--bg-light);
+    border-radius: var(--radius);
+    font-size: 13px;
+}
+
+.preview-chip {
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.cart-mode-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+}
+
+.cart-mode-card {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    transition: all 0.2s ease;
+    background-color: white;
+}
+
+.cart-mode-card:hover {
+    border-color: var(--primary-light);
+}
+
+.cart-mode-card input[type="radio"] {
+    display: none;
+}
+
+.cart-mode-card:has(input:checked) {
+    border-color: var(--primary);
+    background-color: rgba(237, 90, 26, 0.04);
+}
+
+.mode-preview {
+    flex-shrink: 0;
+}
+
+.mode-mock {
+    width: 80px;
+    height: 56px;
+    border-radius: 6px;
+    background-color: var(--bg-light);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+
+.mode-mock-page .mock-header {
+    height: 14px;
+    background-color: var(--primary);
+}
+
+.mode-mock-page .mock-body {
+    height: 42px;
+    margin: 6px;
+    background-color: white;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+}
+
+.mode-mock-sidebar .mock-page {
+    position: absolute;
+    inset: 0;
+    background-color: white;
+}
+
+.mode-mock-sidebar .mock-sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 28px;
+    background-color: var(--primary);
+}
+
+.mode-mock-public,
+.mode-mock-private {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+}
+
+.mode-mock-public .mock-globe,
+.mode-mock-private .mock-lock {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: var(--primary);
+    position: relative;
+}
+
+.mode-mock-public .mock-globe::before,
+.mode-mock-public .mock-globe::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid white;
+    border-radius: 50%;
+}
+
+.mode-mock-public .mock-globe::after {
+    inset: 4px 0;
+    border-radius: 50%;
+    border-left: none;
+    border-right: none;
+}
+
+.mode-mock-private .mock-lock {
+    border-radius: 6px;
+    background-color: var(--primary);
+}
+
+.mode-mock-private .mock-lock::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 14px;
+    height: 10px;
+    border: 2px solid var(--primary);
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    transform: translateX(-50%);
+}
+
+.mode-mock-private .mock-lock::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 8px;
+    background-color: white;
+    border-radius: 2px;
+    transform: translate(-50%, -50%);
+}
+
+.mode-info strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+
+.mode-info p {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.form-actions .primary-btn,
+.form-actions .ghost-btn {
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.form-actions .ghost-btn {
+    background-color: white;
+    border-color: var(--border);
+}
+
+.add-user-form .form-row { margin-bottom: 6px; }
+
+/* ----- Store ID banner ----- */
+.store-id-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, rgba(237, 90, 26, 0.08) 0%, rgba(237, 90, 26, 0.02) 100%);
+    border: 1px solid rgba(237, 90, 26, 0.25);
+    border-inline-start: 4px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 22px;
+}
+
+.store-id-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+}
+
+.store-id-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.store-id-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.store-id-edit-btn {
+    background-color: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.store-id-edit-btn:hover {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.store-id-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: monospace;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+}
+
+.store-id-note {
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+/* Compact variant used inside the settings card */
+.store-id-hint {
+    background-color: var(--bg-light);
+    border-inline-start: 3px solid var(--primary);
+    padding: 12px 14px;
+    border-radius: 6px;
+    margin-top: 14px;
+}
+
+.store-id-hint code {
+    background-color: white;
+    border: 1px solid var(--border);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 1px;
+    margin-inline-start: 6px;
+}
+
+/* ----- Highlighted "website users" boxes ----- */
+.web-users-box {
+    background-color: white;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 22px;
+    position: relative;
+}
+
+.web-users-badge {
+    position: absolute;
+    top: -12px;
+    inset-inline-start: 18px;
+}
+
+.web-users-pill {
+    display: inline-block;
+    background-color: var(--primary);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(237, 90, 26, 0.3);
+}
+
+.web-users-box h2 {
+    font-size: 17px;
+    margin: 6px 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.web-users-icon {
+    font-size: 20px;
+}
+
+.web-add-btn {
+    font-weight: 700;
+    font-size: 15px;
+    padding: 11px 22px;
+    box-shadow: 0 2px 8px rgba(237, 90, 26, 0.25);
+}
+
+.user-store-pill {
+    font-family: monospace;
+    background-color: var(--bg-light);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.add-user-error {
+    background-color: rgba(192, 57, 43, 0.1);
+    color: var(--danger);
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+/* ----- Responsive admin ----- */
+@media (max-width: 768px) {
+    .admin-header-container {
+        flex-wrap: wrap;
+    }
+
+    .admin-nav {
+        order: 4;
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .admin-table th:first-child,
+    .admin-table td:first-child {
+        display: none;
+    }
+}
