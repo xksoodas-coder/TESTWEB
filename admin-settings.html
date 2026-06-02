@@ -120,6 +120,41 @@
                 </div>
             </div>
 
+            <!-- Storefront display mode -->
+            <div class="admin-card">
+                <h2>طريقة عرض المتجر</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    اختر هل يبدأ الزبون من قائمة التصنيفات، أم يرى جميع المنتجات مباشرةً.
+                </p>
+
+                <div class="cart-mode-options">
+                    <label class="cart-mode-card">
+                        <input type="radio" name="displayMode" value="categories" id="displayCategories">
+                        <div class="mode-info">
+                            <strong>عرض التصنيفات</strong>
+                            <p>يرى الزبون التصنيفات أولًا ثم يدخل لكل تصنيف لعرض منتجاته.</p>
+                        </div>
+                    </label>
+
+                    <label class="cart-mode-card">
+                        <input type="radio" name="displayMode" value="products" id="displayProducts">
+                        <div class="mode-info">
+                            <strong>عرض كل المنتجات</strong>
+                            <p>تظهر جميع المنتجات مباشرةً دون المرور بالتصنيفات.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="form-group" id="pageSizeWrap" style="margin-top:16px;display:none">
+                    <label for="pageSize">عدد المنتجات في كل صفحة</label>
+                    <input type="number" id="pageSize" class="admin-input" min="1" max="200" step="1"
+                           placeholder="25" style="max-width:160px">
+                    <p class="muted" style="margin-top:6px;font-size:12px">
+                        مثال: 25 يعني تحميل أول 25 منتجًا فقط ثم التنقل بين الصفحات.
+                    </p>
+                </div>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="primary-btn">حفظ الإعدادات</button>
                 <button type="button" class="ghost-btn" id="resetSettingsBtn">إعادة إلى الافتراضي</button>

@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyStoreBranding();
     initFooterReveal();
 
+    // Pull this store's server-side settings (theme, announcement, display
+    // mode, page size) and re-apply them before rendering content.
+    await refreshSiteSettings();
+
     try {
         if (document.getElementById('categoriesGrid')) {
             await renderCategoriesGrid();
@@ -152,6 +156,14 @@ function renderCustomerBadge() {
 
 // ===== Inject shared chrome (favorites link + footer store-info block) =====
 function injectChrome() {
+    // 0. Ensure a toast element exists (the home page doesn't ship one).
+    if (!document.getElementById('toast')) {
+        const t = document.createElement('div');
+        t.id = 'toast';
+        t.className = 'toast';
+        document.body.appendChild(t);
+    }
+
     // 1. "المفضلة" link in the main nav.
     const nav = document.querySelector('.main-nav');
     if (nav && !nav.querySelector('.nav-favorites')) {
@@ -196,6 +208,13 @@ function initFooterReveal() {
     window.addEventListener('scroll', check, { passive: true });
     window.addEventListener('resize', check, { passive: true });
     check();
+}
+
+// ===== Server settings refresh =====
+async function refreshSiteSettings() {
+    if (!BWS.getSessionToken()) return;
+    try { await BWS.fetchSiteSettings(); } catch { /* keep cache */ }
+    applyThemeAndAnnouncement();
 }
 
 // ===== Theme + Announcement bar =====
@@ -342,10 +361,10 @@ function renderCartSidebar() {
 }
 
 function wireCartIcons() {
-    const mode = BWS.getSettings().cartMode;
     document.querySelectorAll('.cart-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            if (mode === 'sidebar') {
+            // Read the mode at click-time so a later server refresh is honoured.
+            if (BWS.getSettings().cartMode === 'sidebar') {
                 e.preventDefault();
                 openCartSidebar();
             }
@@ -356,6 +375,13 @@ function wireCartIcons() {
 // ===== Categories Grid =====
 async function renderCategoriesGrid() {
     const grid = document.getElementById('categoriesGrid');
+
+    // "products" display mode: show all products directly (paginated) instead
+    // of the category tiles.
+    if (BWS.getSettings().displayMode === 'products') {
+        return renderAllProductsMode(grid, BWS.getSettings().pageSize);
+    }
+
     grid.innerHTML = '<div class="empty-state"><p>جاري التحميل...</p></div>';
 
     let families;
@@ -389,6 +415,66 @@ async function renderCategoriesGrid() {
             <div class="category-name">${escapeHtml(f.name)}</div>
         </a>
     `).join('');
+}
+
+// All-products display mode (paginated) shown on the home page.
+async function renderAllProductsMode(grid, pageSize) {
+    const titleEl = document.querySelector('.page-title');
+    const subEl = document.querySelector('.page-subtitle');
+    if (titleEl) titleEl.textContent = 'المنتجات';
+    if (subEl) subEl.textContent = 'جميع منتجات المتجر';
+
+    grid.classList.remove('categories-grid');
+    grid.classList.add('products-grid');
+
+    const section = grid.closest('.content-section') || grid.parentElement;
+    let pager = document.getElementById('productsPager');
+    if (!pager) {
+        pager = document.createElement('div');
+        pager.id = 'productsPager';
+        pager.className = 'products-pager';
+        section.appendChild(pager);
+    }
+
+    const size = pageSize || 25;
+    let page = 1;
+
+    function renderPager(total) {
+        const pages = Math.max(1, Math.ceil(total / size));
+        if (pages <= 1) { pager.innerHTML = ''; return; }
+        pager.innerHTML = `
+            <button class="pager-btn" id="pagerPrev" ${page <= 1 ? 'disabled' : ''}>السابق</button>
+            <span class="pager-info">صفحة ${page} من ${pages}</span>
+            <button class="pager-btn" id="pagerNext" ${page >= pages ? 'disabled' : ''}>التالي</button>
+        `;
+        document.getElementById('pagerPrev')?.addEventListener('click', () => { if (page > 1) loadPage(page - 1); });
+        document.getElementById('pagerNext')?.addEventListener('click', () => { if (page < pages) loadPage(page + 1); });
+    }
+
+    async function loadPage(p) {
+        page = p;
+        grid.innerHTML = '<div class="empty-state"><p>جاري التحميل...</p></div>';
+        let res;
+        try {
+            res = await BWS.fetchAllProducts({ page, pageSize: size });
+        } catch (err) {
+            grid.innerHTML = `<div class="empty-state"><h2>تعذّر تحميل المنتجات</h2><p>${escapeHtml(err.message || '')}</p></div>`;
+            pager.innerHTML = '';
+            return;
+        }
+        const { products, total } = res;
+        if (!products.length) {
+            grid.innerHTML = '<div class="empty-state"><h2>لا توجد منتجات حاليًا</h2></div>';
+            pager.innerHTML = '';
+            return;
+        }
+        grid.innerHTML = products.map(renderProductCard).join('');
+        wireProductCards(grid, products, false);
+        renderPager(total);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    await loadPage(1);
 }
 
 function renderImageOrPlaceholder(src, fallbackText) {
@@ -478,7 +564,6 @@ function renderProductCard(p) {
     const fav = p.isFavorite ? ' active' : '';
     return `
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
-            <button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>
             <div class="product-image">
                 ${renderImageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
             </div>
@@ -487,9 +572,12 @@ function renderProductCard(p) {
             <div class="product-status ${available ? 'status-available' : 'status-unavailable'}">
                 ${available ? 'متاح' : 'غير متاح'}
             </div>
-            <button class="add-cart-btn" ${available ? '' : 'hidden'}>
-                إضافة إلى السلة
-            </button>
+            <div class="product-actions">
+                <button class="add-cart-btn" ${available ? '' : 'hidden'}>
+                    إضافة إلى السلة
+                </button>
+                <button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>
+            </div>
         </div>
     `;
 }

@@ -10,10 +10,11 @@ const BWS = (function () {
     // ----- localStorage keys -----
     const LS_HIDDEN = 'bws_hidden_categories';
     const LS_CART = 'bws_cart';
-    const LS_ADMIN_AUTH = 'bws_admin_authed';
     const LS_SETTINGS = 'bws_settings';
     const LS_SESSION_TOKEN = 'bws_session_token';
     const LS_CUSTOMER = 'bws_customer';
+    const LS_ADMIN_TOKEN = 'bws_admin_token';
+    const LS_ADMIN_SESSION = 'bws_admin_session';
 
     const DEFAULT_SETTINGS = {
         theme: {
@@ -22,7 +23,11 @@ const BWS = (function () {
             primaryLight: '#ff7c3e'
         },
         announcement: '',
-        cartMode: 'page'
+        cartMode: 'page',
+        // Storefront layout: 'categories' = show category tiles first,
+        // 'products' = show all products directly (paginated).
+        displayMode: 'categories',
+        pageSize: 25
     };
 
     // In-memory cache, refilled per page load.
@@ -43,23 +48,25 @@ const BWS = (function () {
     function getSettings() {
         const raw = readJSON(LS_SETTINGS, null);
         if (!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+        const pageSize = Number(raw.pageSize);
         return {
             theme: { ...DEFAULT_SETTINGS.theme, ...(raw.theme || {}) },
             announcement: typeof raw.announcement === 'string'
                 ? raw.announcement : DEFAULT_SETTINGS.announcement,
-            cartMode: raw.cartMode === 'sidebar' ? 'sidebar' : 'page'
+            cartMode: raw.cartMode === 'sidebar' ? 'sidebar' : 'page',
+            displayMode: raw.displayMode === 'products' ? 'products' : 'categories',
+            pageSize: Number.isFinite(pageSize) && pageSize > 0
+                ? Math.min(200, Math.floor(pageSize)) : DEFAULT_SETTINGS.pageSize
         };
     }
     function setSettings(next) {
         writeJSON(LS_SETTINGS, { ...getSettings(), ...next });
     }
 
-    // ----- admin auth (local only) -----
-    const isAdminAuthed = () => localStorage.getItem(LS_ADMIN_AUTH) === '1';
-    function setAdminAuthed(v) {
-        if (v) localStorage.setItem(LS_ADMIN_AUTH, '1');
-        else localStorage.removeItem(LS_ADMIN_AUTH);
-    }
+    // ----- admin auth (server-backed token) -----
+    const getAdminToken = () => localStorage.getItem(LS_ADMIN_TOKEN) || null;
+    const getAdminSession = () => readJSON(LS_ADMIN_SESSION, null);
+    const isAdminAuthed = () => !!getAdminToken();
 
     // ----- hidden categories (admin toggle) -----
     const getHiddenIds = () => readJSON(LS_HIDDEN, []);
@@ -86,7 +93,12 @@ const BWS = (function () {
     // ----- API helper -----
     async function apiFetch(path, options = {}) {
         const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-        const token = getSessionToken();
+        // Storefront calls use the customer token; admin calls use the admin
+        // token. On a pure-admin browser (no customer session) fall back to the
+        // admin token so shared GET endpoints (categories) still authenticate.
+        const token = options.adminAuth
+            ? getAdminToken()
+            : (getSessionToken() || getAdminToken());
         if (token) headers.Authorization = `Bearer ${token}`;
 
         const res = await fetch(path, {
@@ -114,17 +126,50 @@ const BWS = (function () {
         getDefaultSettings: () => JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
         resetSettings: () => localStorage.removeItem(LS_SETTINGS),
 
+        // Pull the store's settings from the server and cache them locally so
+        // applyThemeAndAnnouncement() (sync) reflects them on the next render.
+        async fetchSiteSettings({ adminAuth = false } = {}) {
+            try {
+                const data = await apiFetch('/api/site-settings', { method: 'GET', adminAuth });
+                if (data && data.settings && typeof data.settings === 'object') {
+                    writeJSON(LS_SETTINGS, data.settings);
+                }
+            } catch { /* keep local cache */ }
+            return getSettings();
+        },
+        // Admin-only: persist the store's settings on the server.
+        async saveSiteSettings(settings) {
+            writeJSON(LS_SETTINGS, settings);
+            await apiFetch('/api/site-settings', {
+                method: 'POST', body: { settings }, adminAuth: true
+            });
+        },
+
         // ----- admin -----
         isAdminAuthed,
-        setAdminAuthed,
-        adminLogin(username, password) {
-            if (username === 'admin' && password === 'admin') {
-                setAdminAuthed(true);
-                return true;
+        getAdminSession,
+        async adminLogin(username, password, storeId) {
+            try {
+                const data = await apiFetch('/api/auth', {
+                    method: 'POST',
+                    body: { username, password, storeId, role: 'admin' }
+                });
+                if (!data.token) return { ok: false, error: 'تعذّر تسجيل الدخول' };
+                localStorage.setItem(LS_ADMIN_TOKEN, data.token);
+                writeJSON(LS_ADMIN_SESSION, {
+                    username,
+                    name: data.customer?.name || username,
+                    storeId
+                });
+                return { ok: true };
+            } catch (err) {
+                return { ok: false, error: err.message || 'تعذّر تسجيل الدخول' };
             }
-            return false;
         },
-        adminLogout: () => setAdminAuthed(false),
+        adminLogout() {
+            localStorage.removeItem(LS_ADMIN_TOKEN);
+            localStorage.removeItem(LS_ADMIN_SESSION);
+        },
 
         // ----- hidden categories -----
         getHiddenIds,
@@ -214,6 +259,15 @@ const BWS = (function () {
         async fetchFavoriteProducts() {
             const data = await apiFetch('/api/products?favorites=1', { method: 'GET' });
             return data.products || [];
+        },
+        // All products across the store, paginated (used by "products" display mode).
+        async fetchAllProducts({ page = 1, pageSize = 25 } = {}) {
+            const offset = Math.max(0, (page - 1) * pageSize);
+            const data = await apiFetch(
+                `/api/products?limit=${pageSize}&offset=${offset}`,
+                { method: 'GET' }
+            );
+            return { products: data.products || [], total: Number(data.total || 0) };
         },
 
         // ----- cart -----

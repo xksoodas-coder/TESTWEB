@@ -40,16 +40,27 @@ function wireLogin() {
         return;
     }
     const form = document.getElementById('loginForm');
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
-        if (BWS.adminLogin(username, password)) {
+        const storeId = document.getElementById('storeId').value.trim();
+        const err = document.getElementById('loginError');
+        err.hidden = true;
+
+        const btn = form.querySelector('button[type="submit"]');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'جاري الدخول...';
+
+        const res = await BWS.adminLogin(username, password, storeId);
+        if (res.ok) {
             window.location.href = 'admin-dashboard.html';
         } else {
-            const err = document.getElementById('loginError');
             err.hidden = false;
-            err.textContent = 'بيانات الدخول غير صحيحة';
+            err.textContent = res.error || 'بيانات الدخول غير صحيحة';
+            btn.disabled = false;
+            btn.textContent = orig;
         }
     });
 }
@@ -175,10 +186,21 @@ function wireSettingsPage() {
         announcement: document.getElementById('announcement'),
         cartModePage: document.getElementById('cartModePage'),
         cartModeSidebar: document.getElementById('cartModeSidebar'),
+        displayCategories: document.getElementById('displayCategories'),
+        displayProducts: document.getElementById('displayProducts'),
+        pageSize: document.getElementById('pageSize'),
+        pageSizeWrap: document.getElementById('pageSizeWrap'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
     };
+
+    function syncPageSizeVisibility() {
+        if (!fields.pageSizeWrap) return;
+        fields.pageSizeWrap.style.display = fields.displayProducts.checked ? '' : 'none';
+    }
+    fields.displayCategories?.addEventListener('change', syncPageSizeVisibility);
+    fields.displayProducts?.addEventListener('change', syncPageSizeVisibility);
 
     function setColorPair(colorEl, hexEl, value) {
         colorEl.value = value;
@@ -205,40 +227,67 @@ function wireSettingsPage() {
         fields.previewLight.style.backgroundColor = fields.primaryLight.value;
     }
 
-    function load() {
-        const s = BWS.getSettings();
+    function fillForm(s) {
         setColorPair(fields.primary, fields.primaryHex, s.theme.primary);
         setColorPair(fields.primaryDark, fields.primaryDarkHex, s.theme.primaryDark);
         setColorPair(fields.primaryLight, fields.primaryLightHex, s.theme.primaryLight);
         fields.announcement.value = s.announcement || '';
         if (s.cartMode === 'sidebar') fields.cartModeSidebar.checked = true;
         else fields.cartModePage.checked = true;
+        if (s.displayMode === 'products') fields.displayProducts.checked = true;
+        else fields.displayCategories.checked = true;
+        if (fields.pageSize) fields.pageSize.value = s.pageSize || 25;
+        syncPageSizeVisibility();
         updatePreview();
+    }
+
+    async function load() {
+        // Server is the source of truth for this store's settings.
+        const s = await BWS.fetchSiteSettings({ adminAuth: true });
+        fillForm(s);
     }
 
     syncColorToHex(fields.primary, fields.primaryHex);
     syncColorToHex(fields.primaryDark, fields.primaryDarkHex);
     syncColorToHex(fields.primaryLight, fields.primaryLightHex);
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        BWS.setSettings({
+        let pageSize = parseInt(fields.pageSize?.value, 10);
+        if (!Number.isFinite(pageSize) || pageSize < 1) pageSize = 25;
+        pageSize = Math.min(200, pageSize);
+
+        const settings = {
             theme: {
                 primary: fields.primary.value,
                 primaryDark: fields.primaryDark.value,
                 primaryLight: fields.primaryLight.value
             },
             announcement: fields.announcement.value,
-            cartMode: fields.cartModeSidebar.checked ? 'sidebar' : 'page'
-        });
-        showToastAdmin('تم حفظ الإعدادات');
+            cartMode: fields.cartModeSidebar.checked ? 'sidebar' : 'page',
+            displayMode: fields.displayProducts.checked ? 'products' : 'categories',
+            pageSize
+        };
+
+        const btn = form.querySelector('button[type="submit"]');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'جاري الحفظ...';
+        try {
+            await BWS.saveSiteSettings(settings);
+            showToastAdmin('تم حفظ الإعدادات على الخادم');
+        } catch (err) {
+            showToastAdmin(err.message || 'تعذّر حفظ الإعدادات');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = orig;
+        }
     });
 
-    document.getElementById('resetSettingsBtn').addEventListener('click', () => {
+    document.getElementById('resetSettingsBtn').addEventListener('click', async () => {
         if (!confirm('استعادة الإعدادات الافتراضية؟')) return;
-        BWS.resetSettings();
-        load();
-        showToastAdmin('تمت الاستعادة إلى الإعدادات الافتراضية');
+        fillForm(BWS.getDefaultSettings());
+        showToastAdmin('تمت الاستعادة — اضغط حفظ لتطبيقها على الخادم');
     });
 
     load();

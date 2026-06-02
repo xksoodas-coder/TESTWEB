@@ -16,11 +16,12 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { username, password, storeId } = req.body || {};
+        const { username, password, storeId, role } = req.body || {};
         if (!username || !password || !storeId) {
             res.status(400).json({ error: 'الرجاء إدخال جميع الحقول' });
             return;
         }
+        const wantAdmin = role === 'admin';
 
         const targetStore = String(storeId).trim();
 
@@ -59,6 +60,17 @@ export default async function handler(req, res) {
             return;
         }
 
+        // WebIsAdmin may arrive as bool, 0/1, or "true"/"1" depending on the
+        // syncing client (desktop C# vs Flutter).
+        const rawAdmin = match.data.WebIsAdmin;
+        const isAdmin = rawAdmin === true || rawAdmin === 1 ||
+            rawAdmin === '1' || String(rawAdmin).toLowerCase() === 'true';
+
+        if (wantAdmin && !isAdmin) {
+            res.status(403).json({ error: 'هذا الحساب لا يملك صلاحية الإدارة' });
+            return;
+        }
+
         const sevenDays = 60 * 60 * 24 * 7;
         // customerId is the desktop DB primary key — invoices/payments/added
         // debts reference the customer by this number, so we carry it in the
@@ -70,6 +82,7 @@ export default async function handler(req, res) {
             customerId,
             name: match.data.Name || match.data.WebUsername || '',
             phone: match.data.Phone || '',
+            isAdmin,
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(Date.now() / 1000) + sevenDays
         });
@@ -77,6 +90,7 @@ export default async function handler(req, res) {
         res.status(200).json({
             ok: true,
             token,
+            isAdmin,
             customer: {
                 name: match.data.Name || match.data.WebUsername || '',
                 phone: match.data.Phone || ''
