@@ -1,13 +1,21 @@
 import { getTursoClient, reduceChangelog } from './_lib/turso.js';
 import { signSession } from './_lib/session.js';
 
+function isTruthy(v) {
+    return v === true || v === 1 || v === '1' || String(v).toLowerCase() === 'true';
+}
+
 /**
  * POST /api/auth
- * body: { username, password, storeId }
+ * body: { username, password, storeId, role }
  *
- * Multi-tenant: the storeId the customer supplies determines which tenant
- * the credentials are checked against. No env-level store binding — this
- * single deployment serves every shop in the Turso database.
+ * Multi-tenant. Two kinds of login share this endpoint:
+ *   - Customer login (default): checks the customer credentials stored in
+ *     turso_customer_changelog (WebUsername / WebPassword) for the shop. The
+ *     customer then browses the storefront for that store.
+ *   - Admin login (role === 'admin'): checks the app USERS synced to the
+ *     turso_users table for the store, and requires the user's CanAccessWebsite
+ *     permission. These users manage the website's settings.
  */
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -21,11 +29,70 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'الرجاء إدخال جميع الحقول' });
             return;
         }
-        const wantAdmin = role === 'admin';
 
         const targetStore = String(storeId).trim();
-
+        const uname = String(username).trim().toLowerCase();
         const client = getTursoClient();
+
+        // ───────────────────────── Admin login (app users) ─────────────────────
+        if (role === 'admin') {
+            let rows;
+            try {
+                const r = await client.execute({
+                    sql: `SELECT json_payload FROM turso_users WHERE store_id = ? LIMIT 1`,
+                    args: [targetStore]
+                });
+                rows = r.rows;
+            } catch {
+                res.status(401).json({ error: 'رمز المتجر غير صحيح أو لا يوجد مستخدمون' });
+                return;
+            }
+
+            if (!rows || rows.length === 0) {
+                res.status(401).json({ error: 'رمز المتجر غير صحيح أو لا يوجد مستخدمون' });
+                return;
+            }
+
+            let users = [];
+            try { users = JSON.parse(rows[0].json_payload) || []; } catch { users = []; }
+
+            const user = users.find(u => {
+                const name = (u.Name || '').toString().trim().toLowerCase();
+                const pass = (u.Password || '').toString();
+                const active = u.IsActive === undefined ? true : isTruthy(u.IsActive);
+                return name === uname && pass === password && active;
+            });
+
+            if (!user) {
+                res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+                return;
+            }
+
+            if (!isTruthy(user.CanAccessWebsite)) {
+                res.status(403).json({ error: 'هذا المستخدم لا يملك صلاحية إدارة الموقع' });
+                return;
+            }
+
+            const sevenDays = 60 * 60 * 24 * 7;
+            const token = signSession({
+                storeId: targetStore,
+                userName: user.Name || username,
+                name: user.Name || username,
+                isAdmin: true,
+                iat: Math.floor(Date.now() / 1000),
+                exp: Math.floor(Date.now() / 1000) + sevenDays
+            });
+
+            res.status(200).json({
+                ok: true,
+                token,
+                isAdmin: true,
+                customer: { name: user.Name || username, phone: '' }
+            });
+            return;
+        }
+
+        // ───────────────────────── Customer login (storefront) ─────────────────
         const result = await client.execute({
             sql: `SELECT record_uuid, operation, json_payload, timestamp
                   FROM turso_customer_changelog
@@ -35,14 +102,12 @@ export default async function handler(req, res) {
         });
 
         if (result.rows.length === 0) {
-            // No customers exist for this store_id at all.
             res.status(401).json({ error: 'رمز المتجر غير صحيح أو لا يوجد زبائن مسجلون' });
             return;
         }
 
         const latest = reduceChangelog(result.rows);
 
-        const uname = String(username).trim().toLowerCase();
         let match = null;
         for (const [recordUuid, entry] of latest) {
             let data;
@@ -60,17 +125,6 @@ export default async function handler(req, res) {
             return;
         }
 
-        // WebIsAdmin may arrive as bool, 0/1, or "true"/"1" depending on the
-        // syncing client (desktop C# vs Flutter).
-        const rawAdmin = match.data.WebIsAdmin;
-        const isAdmin = rawAdmin === true || rawAdmin === 1 ||
-            rawAdmin === '1' || String(rawAdmin).toLowerCase() === 'true';
-
-        if (wantAdmin && !isAdmin) {
-            res.status(403).json({ error: 'هذا الحساب لا يملك صلاحية الإدارة' });
-            return;
-        }
-
         const sevenDays = 60 * 60 * 24 * 7;
         // customerId is the desktop DB primary key — invoices/payments/added
         // debts reference the customer by this number, so we carry it in the
@@ -82,7 +136,6 @@ export default async function handler(req, res) {
             customerId,
             name: match.data.Name || match.data.WebUsername || '',
             phone: match.data.Phone || '',
-            isAdmin,
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(Date.now() / 1000) + sevenDays
         });
@@ -90,7 +143,6 @@ export default async function handler(req, res) {
         res.status(200).json({
             ok: true,
             token,
-            isAdmin,
             customer: {
                 name: match.data.Name || match.data.WebUsername || '',
                 phone: match.data.Phone || ''
