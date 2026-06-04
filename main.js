@@ -5,6 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
     applyThemeAndAnnouncement();
+    if (!(await ensureTenant())) return;
     if (!enforcePrivateAccess()) return;
     injectChrome();
     updateCartBadge();
@@ -87,11 +88,46 @@ function makeBSFallback() {
 }
 window.makeBSFallback = makeBSFallback;
 
+// ===== Tenant (multi-store) resolution =====
+// Determines which store this link/domain is, shows an "unavailable" page for
+// disabled stores, and logs out if the saved session belongs to another store.
+async function ensureTenant() {
+    let t;
+    try { t = await BWS.resolveTenant(); } catch { return true; }
+    if (!t || !t.found) return true; // platform/preview host without a tenant → legacy behaviour
+
+    if (t.active === false) {
+        document.body.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;'
+            + 'font-family:sans-serif;color:#444;text-align:center;padding:24px">'
+            + '<div><h1 style="font-size:22px;margin-bottom:8px">هذا المتجر غير متاح حاليًا</h1>'
+            + '<p style="color:#888">يرجى المحاولة لاحقًا.</p></div></div>';
+        return false;
+    }
+
+    // Logged into a different store than this link → clear and force re-login.
+    const session = BWS.getCustomerSession();
+    if (session && session.storeId && t.storeId && session.storeId !== t.storeId) {
+        BWS.customerLogout();
+    }
+    return true;
+}
+
+// Append the current ?store= slug (platform-host testing) to an internal URL so
+// the tenant survives navigation when there is no subdomain/custom domain.
+function withTenant(url) {
+    try {
+        const slug = new URLSearchParams(location.search).get('store');
+        if (!slug) return url;
+        return url + (url.includes('?') ? '&' : '?') + 'store=' + encodeURIComponent(slug);
+    } catch { return url; }
+}
+
 // ===== Login gate (always required — multi-tenant) =====
 function enforcePrivateAccess() {
     if (BWS.getCustomerSession() && BWS.getSessionToken()) return true;
     if (/login\.html$/i.test(window.location.pathname)) return true;
-    window.location.replace('login.html');
+    window.location.replace(withTenant('login.html'));
     return false;
 }
 

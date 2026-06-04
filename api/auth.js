@@ -1,5 +1,6 @@
 import { getTursoClient, reduceChangelog } from './_lib/turso.js';
 import { signSession } from './_lib/session.js';
+import { resolveTenant } from './_lib/tenant.js';
 
 function isTruthy(v) {
     return v === true || v === 1 || v === '1' || String(v).toLowerCase() === 'true';
@@ -25,12 +26,25 @@ export default async function handler(req, res) {
 
     try {
         const { username, password, storeId, role } = req.body || {};
-        if (!username || !password || !storeId) {
+
+        // Determine the store from the tenant (link/domain) when available — this
+        // is trusted (server-resolved). Fall back to the store code typed by the
+        // customer (legacy / platform host without a tenant).
+        let tenant = null;
+        try { tenant = await resolveTenant(req); } catch { /* ignore */ }
+        if (tenant && !tenant.active) {
+            res.status(403).json({ error: 'هذا المتجر غير متاح حاليًا' });
+            return;
+        }
+        const targetStore = (tenant && tenant.storeId)
+            ? tenant.storeId
+            : (storeId ? String(storeId).trim() : '');
+
+        if (!username || !password || !targetStore) {
             res.status(400).json({ error: 'الرجاء إدخال جميع الحقول' });
             return;
         }
 
-        const targetStore = String(storeId).trim();
         const uname = String(username).trim().toLowerCase();
         const client = getTursoClient();
 

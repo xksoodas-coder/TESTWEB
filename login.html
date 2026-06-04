@@ -14,7 +14,8 @@
                 <div class="logo-circle"><span>BS</span></div>
             </div>
             <h1>تسجيل دخول الزبون</h1>
-            <p class="login-subtitle">BigWebStore — وصول خاص</p>
+            <p class="login-subtitle" id="tenantName" hidden></p>
+            <p class="login-subtitle" id="loginSubtitle">BigWebStore — وصول خاص</p>
 
             <form id="customerLoginForm" class="admin-form">
                 <div class="form-group">
@@ -25,9 +26,9 @@
                     <label for="cPassword">كلمة المرور</label>
                     <input type="password" id="cPassword" autocomplete="current-password" required>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="storeIdGroup">
                     <label for="cStoreId">رمز المتجر (Store ID)</label>
-                    <input type="text" id="cStoreId" required>
+                    <input type="text" id="cStoreId">
                 </div>
                 <div class="login-error" id="customerLoginError" hidden></div>
                 <button type="submit" class="primary-btn login-btn" id="loginSubmitBtn">دخول</button>
@@ -37,16 +38,51 @@
 
     <script src="data.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        function withStore(url) {
+            try {
+                const slug = new URLSearchParams(location.search).get('store');
+                if (!slug) return url;
+                return url + (url.includes('?') ? '&' : '?') + 'store=' + encodeURIComponent(slug);
+            } catch { return url; }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
             const settings = BWS.getSettings();
             const root = document.documentElement;
             root.style.setProperty('--primary', settings.theme.primary);
             root.style.setProperty('--primary-dark', settings.theme.primaryDark);
             root.style.setProperty('--primary-light', settings.theme.primaryLight);
 
-            if (BWS.getCustomerSession() && BWS.getSessionToken()) {
-                window.location.href = 'index.html';
+            // Which store is this link/domain?
+            const tenant = await BWS.resolveTenant();
+            const tenantActive = tenant && tenant.found && tenant.active;
+
+            if (tenant && tenant.found && tenant.active === false) {
+                document.querySelector('.login-card').innerHTML =
+                    '<h1>هذا المتجر غير متاح حاليًا</h1>';
                 return;
+            }
+
+            if (tenantActive) {
+                // Store is known from the link → no need to type a store code.
+                document.getElementById('storeIdGroup').style.display = 'none';
+                document.getElementById('cStoreId').required = false;
+                const nameEl = document.getElementById('tenantName');
+                if (tenant.name) { nameEl.textContent = tenant.name; nameEl.hidden = false; }
+            } else {
+                document.getElementById('cStoreId').required = true;
+            }
+
+            const session = BWS.getCustomerSession();
+            if (session && BWS.getSessionToken()) {
+                // If logged into a different store than this link, log out instead
+                // of auto-entering the wrong store.
+                if (tenantActive && session.storeId && session.storeId !== tenant.storeId) {
+                    BWS.customerLogout();
+                } else {
+                    window.location.href = withStore('index.html');
+                    return;
+                }
             }
 
             const form = document.getElementById('customerLoginForm');
@@ -61,11 +97,11 @@
 
                 const username = document.getElementById('cUsername').value;
                 const password = document.getElementById('cPassword').value;
-                const storeId = document.getElementById('cStoreId').value;
+                const storeId = tenantActive ? '' : document.getElementById('cStoreId').value;
 
                 const result = await BWS.customerLogin(username, password, storeId);
                 if (result.ok) {
-                    window.location.href = 'index.html';
+                    window.location.href = withStore('index.html');
                 } else {
                     errEl.hidden = false;
                     errEl.textContent = result.error;

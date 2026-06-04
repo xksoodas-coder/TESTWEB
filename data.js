@@ -16,6 +16,23 @@ const BWS = (function () {
     const LS_ADMIN_TOKEN = 'bws_admin_token';
     const LS_ADMIN_SESSION = 'bws_admin_session';
     const LS_PRICE_TIER = 'bws_price_tier'; // global selected price tier (1/2/3)
+    const LS_TENANT = 'bws_tenant';          // resolved tenant {slug, storeId, name, active}
+
+    let _tenantInfo = null;
+
+    // The storefront's tenant is derived from the link: a custom domain / a
+    // subdomain (server reads Host) or, on the platform/preview host, a
+    // ?store=<slug> query for testing.
+    function urlStoreSlug() {
+        try { return (new URLSearchParams(location.search).get('store') || '').trim().toLowerCase(); }
+        catch { return ''; }
+    }
+    function getTenantSlug() {
+        const u = urlStoreSlug();
+        if (u) return u;
+        try { const t = JSON.parse(localStorage.getItem(LS_TENANT) || 'null'); return (t && t.slug) || ''; }
+        catch { return ''; }
+    }
 
     const DEFAULT_SETTINGS = {
         theme: {
@@ -101,6 +118,12 @@ const BWS = (function () {
             ? getAdminToken()
             : (getSessionToken() || getAdminToken());
         if (token) headers.Authorization = `Bearer ${token}`;
+
+        // Tell the server which tenant we are (used pre-login / on the platform
+        // host). On real custom domains/subdomains the server resolves from Host
+        // and ignores this, so it can't be used to cross tenants.
+        const tenantSlug = getTenantSlug();
+        if (tenantSlug) headers['x-store-slug'] = tenantSlug;
 
         const res = await fetch(path, {
             ...options,
@@ -334,6 +357,30 @@ const BWS = (function () {
         cartCount: () => getCart().reduce((s, it) => s + Number(it.qty || 0), 0),
         cartTotal: () => getCart().reduce((s, it) => s + Number(it.price || 0) * Number(it.qty || 0), 0),
 
+        // ----- tenant (multi-store) -----
+        // Resolve which store this link/domain belongs to (before login).
+        async resolveTenant({ force = false } = {}) {
+            if (!force && _tenantInfo) return _tenantInfo;
+            const slug = urlStoreSlug();
+            const qs = slug ? ('?store=' + encodeURIComponent(slug)) : '';
+            try {
+                const data = await apiFetch('/api/tenant' + qs, { method: 'GET' });
+                _tenantInfo = data;
+                if (data && data.found && data.slug) {
+                    writeJSON(LS_TENANT, {
+                        slug: data.slug, storeId: data.storeId,
+                        name: data.name, active: data.active
+                    });
+                }
+                return data;
+            } catch {
+                return { found: false };
+            }
+        },
+        getTenantInfo() {
+            return _tenantInfo || readJSON(LS_TENANT, null);
+        },
+
         // ----- customer session (server) -----
         getCustomerSession,
         getSessionToken,
@@ -344,11 +391,15 @@ const BWS = (function () {
                     body: { username, password, storeId }
                 });
                 setSessionToken(data.token);
+                // The effective store is the tenant's (when resolved from the
+                // link) — used to detect a tenant/session mismatch later.
+                const effStore = (this.getTenantInfo() && this.getTenantInfo().storeId)
+                    ? this.getTenantInfo().storeId : storeId;
                 writeJSON(LS_CUSTOMER, {
                     username,
                     name: data.customer?.name || username,
                     phone: data.customer?.phone || '',
-                    storeId,
+                    storeId: effStore,
                     // Price permissions for this customer (which tiers they may
                     // use, and whether each product's price can be switched).
                     priceTiers: Array.isArray(data.customer?.priceTiers) && data.customer.priceTiers.length
