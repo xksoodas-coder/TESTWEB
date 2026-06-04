@@ -125,6 +125,16 @@ export default async function handler(req, res) {
             return;
         }
 
+        // Price permissions: which tiers this customer may use, and whether
+        // each product's price can be switched (per-product) vs one global tier.
+        const priceTiers = [];
+        // Price 1 is allowed by default (backward compat with old records).
+        if (match.data.CanUsePrice1 === undefined || isTruthy(match.data.CanUsePrice1)) priceTiers.push(1);
+        if (isTruthy(match.data.CanUsePrice2)) priceTiers.push(2);
+        if (isTruthy(match.data.CanUsePrice3)) priceTiers.push(3);
+        if (priceTiers.length === 0) priceTiers.push(1);
+        const pricePerProduct = isTruthy(match.data.PricePerProduct);
+
         const sevenDays = 60 * 60 * 24 * 7;
         // customerId is the desktop DB primary key — invoices/payments/added
         // debts reference the customer by this number, so we carry it in the
@@ -136,6 +146,8 @@ export default async function handler(req, res) {
             customerId,
             name: match.data.Name || match.data.WebUsername || '',
             phone: match.data.Phone || '',
+            priceTiers,
+            pricePerProduct,
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(Date.now() / 1000) + sevenDays
         });
@@ -145,7 +157,9 @@ export default async function handler(req, res) {
             token,
             customer: {
                 name: match.data.Name || match.data.WebUsername || '',
-                phone: match.data.Phone || ''
+                phone: match.data.Phone || '',
+                priceTiers,
+                pricePerProduct
             }
         });
     } catch (err) {

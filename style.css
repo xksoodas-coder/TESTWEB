@@ -523,6 +523,48 @@ img {
     color: var(--text-dark);
 }
 
+/* ===== Per-customer price tier selector ===== */
+.price-tier-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.price-tier-bar .ptb-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.price-tier-bar .ptb-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-white);
+    color: var(--text-dark);
+    border-radius: var(--radius);
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.price-tier-bar .ptb-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.tier-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-inline-start: 6px;
+}
+
 /* ===== Cart Page ===== */
 .cart-section {
     display: grid;
@@ -1046,8 +1088,8 @@ img {
     top: 0;
     left: 0;
     height: 100vh;
-    width: 360px;
-    max-width: 90vw;
+    width: 440px;
+    max-width: 94vw;
     background-color: var(--bg-white);
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
     z-index: 950;
@@ -1113,8 +1155,8 @@ img {
 }
 
 .sidebar-item-img {
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     background-color: var(--bg-light);
     border-radius: 6px;
     display: flex;
@@ -1153,6 +1195,54 @@ img {
     font-size: 13px;
     font-weight: 600;
 }
+
+/* Quantity stepper inside the cart sidebar */
+.sidebar-qty {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.sidebar-qty .qty-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-white);
+    color: var(--text-dark);
+    font-size: 17px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.sidebar-qty .qty-btn:hover { background: var(--bg-light); }
+
+.sidebar-qty .qty-value {
+    min-width: 24px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+/* Per-product price switch arrow (per-product pricing mode) */
+.price-switch-btn {
+    margin-inline-start: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-white);
+    border-radius: 6px;
+    width: 24px;
+    height: 22px;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--primary);
+}
+
+.price-switch-btn:hover { background: var(--bg-light); }
 
 .sidebar-item-remove {
     width: 28px;

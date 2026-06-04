@@ -342,7 +342,12 @@ function renderCartSidebar() {
                 </div>
                 <div class="sidebar-item-info">
                     <h4>${escapeHtml(it.name)}</h4>
-                    <div class="item-price">${BWS.formatPrice(it.price)} × ${it.qty}</div>
+                    <div class="item-price">${BWS.formatPrice(it.price)}${priceArrowHtml(it)}</div>
+                    <div class="sidebar-qty">
+                        <button class="qty-btn qty-dec" aria-label="تقليل">−</button>
+                        <span class="qty-value">${it.qty}</span>
+                        <button class="qty-btn qty-inc" aria-label="زيادة">+</button>
+                    </div>
                 </div>
                 <button class="sidebar-item-remove" aria-label="حذف">×</button>
             </div>
@@ -354,6 +359,30 @@ function renderCartSidebar() {
                 renderCartSidebar();
                 updateCartBadge();
             });
+            row.querySelector('.qty-dec').addEventListener('click', () => {
+                const cur = BWS.getCart().find(it => it.uuid === uuid);
+                if (!cur) return;
+                if (cur.qty <= 1) BWS.removeFromCart(uuid);
+                else BWS.updateCartQty(uuid, cur.qty - 1);
+                renderCartSidebar();
+                updateCartBadge();
+            });
+            row.querySelector('.qty-inc').addEventListener('click', () => {
+                const cur = BWS.getCart().find(it => it.uuid === uuid);
+                if (!cur) return;
+                BWS.updateCartQty(uuid, cur.qty + 1);
+                renderCartSidebar();
+                updateCartBadge();
+            });
+            const switchBtn = row.querySelector('.price-switch-btn');
+            if (switchBtn) {
+                switchBtn.addEventListener('click', () => {
+                    const cur = BWS.getCart().find(it => it.uuid === uuid);
+                    if (!cur) return;
+                    BWS.setCartItemTier(uuid, BWS.nextTier(cur.prices, cur.tier));
+                    renderCartSidebar();
+                });
+            }
         });
     }
     const totalEl = document.getElementById('sidebarTotal');
@@ -470,6 +499,7 @@ async function renderAllProductsMode(grid, pageSize) {
         }
         grid.innerHTML = products.map(renderProductCard).join('');
         wireProductCards(grid, products, false);
+        setupPriceTierBar(products, grid, false);
         renderPager(total);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -557,6 +587,7 @@ async function renderProductsPage() {
     emptyState.style.display = 'none';
     grid.innerHTML = products.map(renderProductCard).join('');
     wireProductCards(grid, products, favoritesMode);
+    setupPriceTierBar(products, grid, favoritesMode);
 }
 
 function renderProductCard(p) {
@@ -568,7 +599,7 @@ function renderProductCard(p) {
                 ${renderImageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
             </div>
             <div class="product-name">${escapeHtml(p.name)}</div>
-            <div class="product-price">${BWS.formatPrice(p.price)}</div>
+            <div class="product-price">${BWS.formatPrice(BWS.effectivePrice(p))}</div>
             <div class="product-status ${available ? 'status-available' : 'status-unavailable'}">
                 ${available ? 'متاح' : 'غير متاح'}
             </div>
@@ -580,6 +611,52 @@ function renderProductCard(p) {
             </div>
         </div>
     `;
+}
+
+// Global price-tier selector (shown only in "apply to all products" mode when
+// the customer is allowed more than one tier). Switches the price shown on all
+// cards at once.
+function setupPriceTierBar(products, grid, favoritesMode) {
+    const section = document.querySelector('.page-title-section');
+    const existing = document.getElementById('priceTierBar');
+
+    if (BWS.isPricePerProduct() || BWS.allowedTiers().length <= 1) {
+        if (existing) existing.remove();
+        return;
+    }
+
+    let bar = existing;
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'priceTierBar';
+        bar.className = 'price-tier-bar';
+        if (section) section.appendChild(bar);
+        else grid.parentElement.insertBefore(bar, grid);
+    }
+
+    const tiers = BWS.allowedTiers();
+    const current = BWS.getGlobalTier();
+    bar.innerHTML = '<span class="ptb-label">السعر المعروض:</span>' +
+        tiers.map(t =>
+            `<button class="ptb-btn${t === current ? ' active' : ''}" data-tier="${t}">${escapeHtml(BWS.tierLabel(t))}</button>`
+        ).join('');
+
+    bar.querySelectorAll('.ptb-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            BWS.setGlobalTier(Number(btn.dataset.tier));
+            grid.innerHTML = products.map(renderProductCard).join('');
+            wireProductCards(grid, products, favoritesMode);
+            setupPriceTierBar(products, grid, favoritesMode);
+        });
+    });
+}
+
+// Small per-product price-switch control (per-product pricing mode).
+function priceArrowHtml(it) {
+    if (!BWS.isPricePerProduct() || !it.prices) return '';
+    if (BWS.itemUsableTiers(it.prices).length <= 1) return '';
+    return ` <span class="tier-tag">${escapeHtml(BWS.tierLabel(it.tier || 1))}</span>` +
+           `<button class="price-switch-btn" type="button" title="تغيير السعر">⇄</button>`;
 }
 
 function wireProductCards(grid, products, favoritesMode) {
@@ -667,7 +744,7 @@ function renderCartPage() {
             </div>
             <div class="cart-item-info">
                 <h4>${escapeHtml(item.name)}</h4>
-                <div class="item-price">${BWS.formatPrice(item.price)}</div>
+                <div class="item-price">${BWS.formatPrice(item.price)}${priceArrowHtml(item)}</div>
                 <div style="font-size:12px;color:var(--text-muted)">${escapeHtml(item.family || '')}</div>
             </div>
             <div class="qty-controls">
@@ -702,6 +779,15 @@ function renderCartPage() {
             updateCartBadge();
             showToast('تم حذف المنتج من السلة');
         });
+        const switchBtn = row.querySelector('.price-switch-btn');
+        if (switchBtn) {
+            switchBtn.addEventListener('click', () => {
+                const cur = BWS.getCart().find(it => it.uuid === uuid);
+                if (!cur) return;
+                BWS.setCartItemTier(uuid, BWS.nextTier(cur.prices, cur.tier));
+                renderCartPage();
+            });
+        }
     });
 
     document.getElementById('summaryCount').textContent = BWS.cartCount();

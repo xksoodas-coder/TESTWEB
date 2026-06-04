@@ -127,12 +127,18 @@ export default async function handler(req, res) {
 
             const totalQty = Number(entry.quantity ?? 0);
             const imageVersion = data.imageVersion ?? '';
+            const price1 = Number(data.sellPrice ?? 0);
+            const price2 = Number(data.wholesalePrice ?? 0);
+            const price3 = Number(data.price3 ?? 0);
             products.push({
                 uuid: recordUuid,
                 id: data.id ?? null,
                 name: data.name ?? '',
                 family,
-                price: Number(data.sellPrice ?? 0),
+                price: price1,
+                price1,
+                price2,
+                price3,
                 quantity: totalQty,
                 available: totalQty > 0,
                 unitType: data.unitType ?? 'قطعة',

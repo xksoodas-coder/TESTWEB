@@ -15,6 +15,7 @@ const BWS = (function () {
     const LS_CUSTOMER = 'bws_customer';
     const LS_ADMIN_TOKEN = 'bws_admin_token';
     const LS_ADMIN_SESSION = 'bws_admin_session';
+    const LS_PRICE_TIER = 'bws_price_tier'; // global selected price tier (1/2/3)
 
     const DEFAULT_SETTINGS = {
         theme: {
@@ -283,12 +284,20 @@ const BWS = (function () {
             if (existing) {
                 existing.qty = Math.min(existing.qty + qty, cap);
             } else {
+                // Snapshot the product's tier prices so the cart can switch
+                // between them later (per-product pricing) without re-querying.
+                const prices = this.productTierPrices(product);
+                const tier = this.isPricePerProduct()
+                    ? this.firstAllowedTier()
+                    : this.getGlobalTier();
                 cart.push({
                     uuid: product.uuid,
                     id: product.id ?? null,
                     name: product.name,
                     family: product.family,
-                    price: Number(product.price || 0),
+                    prices,
+                    tier,
+                    price: this.priceForTier(prices, tier),
                     unitType: product.unitType || 'قطعة',
                     imageUrl: product.imageUrl || '',
                     maxQty: cap,
@@ -297,6 +306,16 @@ const BWS = (function () {
             }
             setCart(cart);
             return true;
+        },
+
+        // Switch a cart item to another allowed price tier (per-product mode).
+        setCartItemTier(uuid, tier) {
+            const cart = getCart();
+            const item = cart.find(it => it.uuid === uuid);
+            if (!item || !item.prices) return;
+            item.tier = tier;
+            item.price = this.priceForTier(item.prices, tier);
+            setCart(cart);
         },
 
         removeFromCart(uuid) {
@@ -330,8 +349,14 @@ const BWS = (function () {
                     name: data.customer?.name || username,
                     phone: data.customer?.phone || '',
                     storeId,
+                    // Price permissions for this customer (which tiers they may
+                    // use, and whether each product's price can be switched).
+                    priceTiers: Array.isArray(data.customer?.priceTiers) && data.customer.priceTiers.length
+                        ? data.customer.priceTiers : [1],
+                    pricePerProduct: data.customer?.pricePerProduct === true,
                     loginAt: new Date().toISOString()
                 });
+                localStorage.removeItem(LS_PRICE_TIER); // reset global tier on login
                 return { ok: true };
             } catch (err) {
                 return { ok: false, error: err.message || 'تعذّر تسجيل الدخول' };
@@ -368,6 +393,62 @@ const BWS = (function () {
                 return { ok: false, error: err.message || 'تعذّر إرسال الطلب' };
             }
         },
+
+        // ----- pricing (per-customer tiers) -----
+        // Which price tiers (1/2/3) this customer may use. Defaults to [1].
+        allowedTiers() {
+            const c = getCustomerSession();
+            const t = (c && Array.isArray(c.priceTiers)) ? c.priceTiers : [1];
+            const clean = t.map(Number).filter(n => n === 1 || n === 2 || n === 3);
+            return clean.length ? Array.from(new Set(clean)).sort() : [1];
+        },
+        firstAllowedTier() { return this.allowedTiers()[0]; },
+        isPricePerProduct() {
+            const c = getCustomerSession();
+            return !!(c && c.pricePerProduct) && this.allowedTiers().length > 1;
+        },
+        getGlobalTier() {
+            const allowed = this.allowedTiers();
+            const saved = Number(localStorage.getItem(LS_PRICE_TIER));
+            return allowed.includes(saved) ? saved : allowed[0];
+        },
+        setGlobalTier(t) {
+            if (this.allowedTiers().includes(Number(t))) {
+                localStorage.setItem(LS_PRICE_TIER, String(Number(t)));
+            }
+        },
+        productTierPrices(product) {
+            const p1 = Number(product.price1 ?? product.price ?? 0);
+            const p2 = Number(product.price2 ?? 0);
+            const p3 = Number(product.price3 ?? 0);
+            return { 1: p1, 2: p2, 3: p3 };
+        },
+        priceForTier(prices, tier) {
+            const v = Number(prices?.[tier] ?? 0);
+            if (v > 0) return v;
+            // Fallback: tier price not set → use price1, else first positive.
+            const p1 = Number(prices?.[1] ?? 0);
+            if (p1 > 0) return p1;
+            for (const k of [2, 3]) { if (Number(prices?.[k]) > 0) return Number(prices[k]); }
+            return 0;
+        },
+        // Tiers usable for a given product: allowed AND have a positive price.
+        itemUsableTiers(prices) {
+            const usable = this.allowedTiers().filter(t => Number(prices?.[t]) > 0);
+            return usable.length ? usable : [this.firstAllowedTier()];
+        },
+        nextTier(prices, currentTier) {
+            const tiers = this.itemUsableTiers(prices);
+            const i = tiers.indexOf(Number(currentTier));
+            return tiers[(i + 1) % tiers.length];
+        },
+        // Effective price shown on a product card (before adding to cart).
+        effectivePrice(product) {
+            const prices = this.productTierPrices(product);
+            const tier = this.isPricePerProduct() ? this.firstAllowedTier() : this.getGlobalTier();
+            return this.priceForTier(prices, tier);
+        },
+        tierLabel(t) { return 'سعر ' + t; },
 
         // ----- formatting -----
         formatPrice(value) {
