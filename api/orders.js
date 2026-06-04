@@ -1,6 +1,48 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash, createHmac } from 'node:crypto';
 import { getTursoClient } from './_lib/turso.js';
 import { readSessionFromRequest } from './_lib/session.js';
+
+// ─── Pusher Channels (same app the mobile listens on) ───
+// Lets the store's phones get a real-time notification when a customer places
+// an order. Credentials can be overridden via env; defaults match the app.
+const PUSHER = {
+    appId: process.env.PUSHER_APP_ID || '2152180',
+    key: process.env.PUSHER_KEY || '0fa1f776b3ea9e8e337c',
+    secret: process.env.PUSHER_SECRET || 'f2d2aedceba1a7a97287',
+    cluster: process.env.PUSHER_CLUSTER || 'eu'
+};
+
+async function notifyNewOrder(storeId, customerName, total) {
+    try {
+        const channel = `store-${storeId}`;
+        const message = `طلبية جديدة من ${customerName || 'زبون'} — ${Math.round(total)} دج`;
+        const data = JSON.stringify({
+            Type: 'order',
+            Device: 'web',
+            UserName: customerName || 'زبون',
+            Store: storeId,
+            Timestamp: new Date().toISOString(),
+            Count: 1,
+            Message: message
+        });
+        const body = JSON.stringify({ name: 'sync-update', channel, data });
+        const path = `/apps/${PUSHER.appId}/events`;
+        const ts = Math.floor(Date.now() / 1000).toString();
+        const bodyMd5 = createHash('md5').update(body).digest('hex');
+        const qs = `auth_key=${PUSHER.key}&auth_timestamp=${ts}&auth_version=1.0&body_md5=${bodyMd5}`;
+        const sig = createHmac('sha256', PUSHER.secret)
+            .update(`POST\n${path}\n${qs}`).digest('hex');
+        const url = `https://api-${PUSHER.cluster}.pusher.com${path}?${qs}&auth_signature=${sig}`;
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body
+        });
+    } catch (err) {
+        // Best-effort — never block order creation on the notification.
+        console.error('[orders] pusher notify failed', err);
+    }
+}
 
 /**
  * Orders live in a dedicated Turso table per store_id (multi-tenant).
@@ -115,6 +157,13 @@ export default async function handler(req, res) {
                     createdAt
                 ]
             });
+
+            // Real-time push to the store's devices (best-effort).
+            await notifyNewOrder(
+                session.storeId,
+                (name || session.name || '').toString(),
+                total
+            );
 
             res.status(201).json({ ok: true, uuid: orderUuid, total, status: 'pending', createdAt });
             return;
