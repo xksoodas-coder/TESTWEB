@@ -76,6 +76,24 @@ export default async function handler(req, res) {
                 return;
             }
 
+            // Anti-spam: only authenticated customers reach here, and each
+            // customer is capped at a small number of pending orders so nobody
+            // can flood the store's order table.
+            if (session.customerUuid) {
+                const cntRes = await client.execute({
+                    sql: `SELECT COUNT(*) AS c FROM bws_pending_orders
+                          WHERE store_id = ? AND customer_uuid = ? AND status = 'pending'`,
+                    args: [session.storeId, session.customerUuid]
+                });
+                const pendingCount = Number(cntRes.rows[0]?.c || 0);
+                if (pendingCount >= 20) {
+                    res.status(429).json({
+                        error: 'لديك عدد كبير من الطلبيات المعلقة. انتظر حتى تتم معالجتها قبل إرسال طلب جديد.'
+                    });
+                    return;
+                }
+            }
+
             const total = cleanItems.reduce((s, it) => s + it.price * it.quantity, 0);
             const orderUuid = randomUUID();
             const createdAt = new Date().toISOString();
