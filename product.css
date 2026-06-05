@@ -1,0 +1,83 @@
+/* ===== Product detail page ===== */
+.product-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 18px 14px 60px;
+}
+
+.pd-top {
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    gap: 20px;
+}
+.pd-image {
+    width: 320px;
+    height: 320px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fafafa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pd-image img { width: 100%; height: 100%; object-fit: cover; }
+.pd-image .category-placeholder { font-size: 60px; }
+
+.pd-info { flex: 1; min-width: 0; }
+.pd-name { font-size: 26px; font-weight: 800; color: var(--text-dark); margin-bottom: 10px; }
+.pd-price { font-size: 26px; font-weight: 800; color: var(--primary); margin-bottom: 14px; }
+
+/* Short description = quick bullet points beside the product. */
+.pd-short { margin-bottom: 14px; }
+.pd-bullets { list-style: none; padding: 0; margin: 0; }
+.pd-bullets li {
+    position: relative;
+    padding-inline-start: 22px;
+    margin-bottom: 7px;
+    font-size: 15px;
+    color: var(--text-dark);
+    line-height: 1.5;
+}
+.pd-bullets li::before {
+    content: '✔';
+    position: absolute;
+    inset-inline-start: 0;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.pd-status { font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+.pd-action { display: inline-block; text-align: center; text-decoration: none; min-width: 220px; }
+.pd-unavailable {
+    display: inline-block;
+    padding: 10px 18px;
+    background: #f1f1f1;
+    color: #999;
+    border-radius: var(--radius);
+    font-weight: 700;
+}
+
+/* Full description = long body below. */
+.pd-full {
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-top: 16px;
+}
+.pd-full-title { font-size: 18px; font-weight: 700; color: var(--text-dark); margin: 0 0 12px; }
+.pd-full-body {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #444;
+    white-space: pre-line; /* preserve paragraphs / line breaks */
+}
+
+@media (max-width: 640px) {
+    .pd-top { flex-direction: column; }
+    .pd-image { width: 100%; height: 280px; }
+}

@@ -155,6 +155,31 @@
                 </div>
             </div>
 
+            <!-- Order mode -->
+            <div class="admin-card">
+                <h2>طريقة الطلب</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    اختر كيف يطلب الزبون. «السلة» تتطلّب حسابًا مسجّلًا. «الطلب المباشر»
+                    تجعل المتجر عامًا (بلا تسجيل دخول) ويطلب الزبون عبر استمارة (زبون عابر).
+                </p>
+                <div class="cart-mode-options">
+                    <label class="cart-mode-card">
+                        <input type="radio" name="orderMode" value="cart" id="orderModeCart">
+                        <div class="mode-info">
+                            <strong>السلة (زبون مسجّل)</strong>
+                            <p>زر «إضافة إلى السلة» ثم إتمام الطلب — يتطلّب تسجيل دخول الزبون.</p>
+                        </div>
+                    </label>
+                    <label class="cart-mode-card">
+                        <input type="radio" name="orderMode" value="direct" id="orderModeDirect">
+                        <div class="mode-info">
+                            <strong>الطلب المباشر (زبون عابر)</strong>
+                            <p>متجر عام بلا تسجيل. زر «اضغط هنا للطلب» يفتح استمارة (اسم، هاتف، ولاية، بلدية، توصيل).</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="primary-btn">حفظ الإعدادات</button>
                 <button type="button" class="ghost-btn" id="resetSettingsBtn">إعادة إلى الافتراضي</button>

@@ -45,7 +45,10 @@ const BWS = (function () {
         // Storefront layout: 'categories' = show category tiles first,
         // 'products' = show all products directly (paginated).
         displayMode: 'categories',
-        pageSize: 25
+        pageSize: 25,
+        // Order flow: 'cart' (default) = login + add-to-cart for registered
+        // customers; 'direct' = public guest ordering via a landing form.
+        orderMode: 'cart'
     };
 
     // In-memory cache, refilled per page load.
@@ -74,7 +77,8 @@ const BWS = (function () {
             cartMode: raw.cartMode === 'sidebar' ? 'sidebar' : 'page',
             displayMode: raw.displayMode === 'products' ? 'products' : 'categories',
             pageSize: Number.isFinite(pageSize) && pageSize > 0
-                ? Math.min(200, Math.floor(pageSize)) : DEFAULT_SETTINGS.pageSize
+                ? Math.min(200, Math.floor(pageSize)) : DEFAULT_SETTINGS.pageSize,
+            orderMode: raw.orderMode === 'direct' ? 'direct' : 'cart'
         };
     }
     function setSettings(next) {
@@ -284,6 +288,11 @@ const BWS = (function () {
             const data = await apiFetch('/api/products?favorites=1', { method: 'GET' });
             return data.products || [];
         },
+        // Single-product detail (incl. short + full descriptions) — fetched only
+        // when a customer opens a product, never with the list.
+        async fetchProductDetail(uuid) {
+            return await apiFetch('/api/product?uuid=' + encodeURIComponent(uuid), { method: 'GET' });
+        },
         // All products across the store, paginated (used by "products" display mode).
         async fetchAllProducts({ page = 1, pageSize = 25 } = {}) {
             const offset = Math.max(0, (page - 1) * pageSize);
@@ -414,6 +423,32 @@ const BWS = (function () {
             }
         },
         customerLogout: () => clearCustomerSession(),
+
+        // ----- guest order (direct / public mode) -----
+        async submitGuestOrder({ items = [], name = '', phone = '', wilaya = '',
+                                 baladiya = '', deliveryType = 'home', notes = '' } = {}) {
+            const clean = (items || []).filter(it => it && it.uuid && Number(it.quantity) > 0);
+            if (clean.length === 0) return { ok: false, error: 'لم تختر أي منتج' };
+            if (!name.trim() || !phone.trim()) {
+                return { ok: false, error: 'الرجاء إدخال الاسم ورقم الهاتف' };
+            }
+            try {
+                const data = await apiFetch('/api/orders', {
+                    method: 'POST',
+                    body: {
+                        items: clean.map(it => ({
+                            uuid: it.uuid, id: it.id ?? null, name: it.name,
+                            price: Number(it.price || 0), quantity: Number(it.quantity),
+                            unitType: it.unitType || 'قطعة'
+                        })),
+                        name, phone, wilaya, baladiya, deliveryType, notes
+                    }
+                });
+                return { ok: true, uuid: data.uuid, total: data.total };
+            } catch (err) {
+                return { ok: false, error: err.message || 'تعذّر إرسال الطلب' };
+            }
+        },
 
         // ----- orders (server) -----
         async submitOrder({ notes = '', name = '', phone = '' } = {}) {

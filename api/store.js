@@ -1,5 +1,5 @@
 import { getTursoClient } from './_lib/turso.js';
-import { readSessionFromRequest } from './_lib/session.js';
+import { resolveReadAccess } from './_lib/access.js';
 import { storeLogoUrl } from './_lib/r2.js';
 
 /**
@@ -16,11 +16,12 @@ export default async function handler(req, res) {
     }
 
     try {
-        const session = readSessionFromRequest(req);
-        if (!session || !session.storeId) {
+        const access = await resolveReadAccess(req);
+        if (!access) {
             res.status(401).json({ error: 'يجب تسجيل الدخول' });
             return;
         }
+        const storeId = access.storeId;
 
         const client = getTursoClient();
         const result = await client.execute({
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
                          email, rib, logo_version
                   FROM turso_store_info
                   WHERE store_id = ? LIMIT 1`,
-            args: [session.storeId]
+            args: [storeId]
         });
 
         let info = {
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
             info.email = String(row.email || '').trim();
             info.rib = String(row.rib || '').trim();
             const version = String(row.logo_version || '').trim();
-            if (version) info.logoUrl = storeLogoUrl(session.storeId, version);
+            if (version) info.logoUrl = storeLogoUrl(storeId, version);
         }
 
         res.setHeader('Cache-Control', 'private, max-age=60');

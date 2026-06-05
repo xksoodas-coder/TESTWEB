@@ -6,19 +6,28 @@
 document.addEventListener('DOMContentLoaded', async () => {
     applyThemeAndAnnouncement();
     if (!(await ensureTenant())) return;
-    if (!enforcePrivateAccess()) return;
+
+    // Pull settings first (public-capable) so we know the order mode before
+    // deciding whether to require login.
+    await refreshSiteSettings();
+    const direct = BWS.getSettings().orderMode === 'direct';
+    window.__BWS_DIRECT__ = direct;
+
+    // Direct (public) stores skip the login gate; cart stores require login.
+    if (!direct && !enforcePrivateAccess()) return;
+
     injectChrome();
     updateCartBadge();
     wireSearchPanel();
     initCartSidebar();
     wireCartIcons();
-    renderCustomerBadge();
+    if (!direct) renderCustomerBadge();
+    if (direct) {
+        // No cart in public mode — hide the cart icon.
+        document.querySelectorAll('.cart-btn').forEach(el => { el.style.display = 'none'; });
+    }
     applyStoreBranding();
     initFooterReveal();
-
-    // Pull this store's server-side settings (theme, announcement, display
-    // mode, page size) and re-apply them before rendering content.
-    await refreshSiteSettings();
 
     try {
         if (document.getElementById('categoriesGrid')) {
@@ -41,7 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ===== Store branding (logo + name in header/footer) =====
 async function applyStoreBranding() {
-    if (!BWS.getSessionToken()) return;
+    // Logged-in customer OR a public store (tenant resolved).
+    if (!BWS.getSessionToken() && !BWS.getTenantInfo()) return;
     let info;
     try { info = await BWS.fetchStoreInfo(); } catch { return; }
     if (!info) return;
@@ -200,9 +210,9 @@ function injectChrome() {
         document.body.appendChild(t);
     }
 
-    // 1. "المفضلة" link in the main nav.
+    // 1. "المفضلة" link in the main nav (cart mode only — needs login).
     const nav = document.querySelector('.main-nav');
-    if (nav && !nav.querySelector('.nav-favorites')) {
+    if (nav && !window.__BWS_DIRECT__ && !nav.querySelector('.nav-favorites')) {
         const a = document.createElement('a');
         a.href = 'products.html?favorites=1';
         a.className = 'nav-favorites';
@@ -248,7 +258,7 @@ function initFooterReveal() {
 
 // ===== Server settings refresh =====
 async function refreshSiteSettings() {
-    if (!BWS.getSessionToken()) return;
+    // Works for logged-in customers AND public (direct-mode) stores via tenant.
     try { await BWS.fetchSiteSettings(); } catch { /* keep cache */ }
     applyThemeAndAnnouncement();
 }
@@ -629,21 +639,32 @@ async function renderProductsPage() {
 function renderProductCard(p) {
     const available = p.available && p.quantity > 0;
     const fav = p.isFavorite ? ' active' : '';
+    const direct = window.__BWS_DIRECT__ === true;
+
+    // In direct (public) mode the action is a link to the order landing page;
+    // no cart, no favourites.
+    const actions = direct
+        ? (available
+            ? `<a class="add-cart-btn order-btn" href="${withTenant('order.html?product=' + encodeURIComponent(p.uuid))}">اضغط هنا للطلب</a>`
+            : `<span class="add-cart-btn" style="opacity:.5;text-align:center;pointer-events:none">غير متاح</span>`)
+        : `<button class="add-cart-btn" ${available ? '' : 'hidden'}>إضافة إلى السلة</button>
+           <button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>`;
+
+    const detailUrl = withTenant('product.html?uuid=' + encodeURIComponent(p.uuid));
     return `
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
-            <div class="product-image">
-                ${renderImageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
-            </div>
-            <div class="product-name">${escapeHtml(p.name)}</div>
+            <a class="product-link" href="${detailUrl}">
+                <div class="product-image">
+                    ${renderImageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+                </div>
+                <div class="product-name">${escapeHtml(p.name)}</div>
+            </a>
             <div class="product-price">${BWS.formatPrice(BWS.effectivePrice(p))}</div>
             <div class="product-status ${available ? 'status-available' : 'status-unavailable'}">
                 ${available ? 'متاح' : 'غير متاح'}
             </div>
             <div class="product-actions">
-                <button class="add-cart-btn" ${available ? '' : 'hidden'}>
-                    إضافة إلى السلة
-                </button>
-                <button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>
+                ${actions}
             </div>
         </div>
     `;
@@ -696,6 +717,8 @@ function priceArrowHtml(it) {
 }
 
 function wireProductCards(grid, products, favoritesMode) {
+    // Direct (public) mode: cards are order links — no cart/favourite wiring.
+    if (window.__BWS_DIRECT__ === true) return;
     const productByUuid = new Map(products.map(p => [p.uuid, p]));
     grid.querySelectorAll('.product-card').forEach(card => {
         const uuid = card.dataset.uuid;

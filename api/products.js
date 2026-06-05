@@ -1,5 +1,5 @@
 import { getTursoClient } from './_lib/turso.js';
-import { readSessionFromRequest } from './_lib/session.js';
+import { resolveReadAccess } from './_lib/access.js';
 import { productImageUrl } from './_lib/r2.js';
 
 /**
@@ -79,11 +79,14 @@ export default async function handler(req, res) {
     }
 
     try {
-        const session = readSessionFromRequest(req);
-        if (!session || !session.storeId) {
+        // Logged-in customer OR a guest on a 'direct'-mode (public) store.
+        const access = await resolveReadAccess(req);
+        if (!access) {
             res.status(401).json({ error: 'يجب تسجيل الدخول' });
             return;
         }
+        const storeId = access.storeId;
+        const session = access.session; // undefined for guests
 
         const familyFilter = (req.query?.family || '').toString().trim();
         const favoritesOnly = String(req.query?.favorites || '') === '1';
@@ -94,14 +97,14 @@ export default async function handler(req, res) {
 
         const client = getTursoClient();
 
-        // Load the customer's favourites (best-effort; table may not exist yet).
+        // Load the customer's favourites (best-effort; guests have none).
         let favSet = new Set();
-        if (session.customerUuid) {
+        if (session && session.customerUuid) {
             try {
                 const favRes = await client.execute({
                     sql: `SELECT product_uuid FROM bws_favorites
                           WHERE store_id = ? AND customer_uuid = ?`,
-                    args: [session.storeId, session.customerUuid]
+                    args: [storeId, session.customerUuid]
                 });
                 favSet = new Set(favRes.rows.map(r => r.product_uuid));
             } catch { /* table missing → no favourites yet */ }
@@ -112,13 +115,15 @@ export default async function handler(req, res) {
                   FROM turso_changelog
                   WHERE store_id = ? AND table_name = 'Products'
                   ORDER BY timestamp ASC`,
-            args: [session.storeId]
+            args: [storeId]
         });
 
         const latest = reduceProducts(result.rows);
         const products = [];
         for (const [recordUuid, entry] of latest) {
             const data = entry.data;
+            // Hidden products never appear on the storefront (default = visible).
+            if (data.webVisible === false) continue;
             const family = (data.family || '').toString().trim();
             if (familyFilter && family !== familyFilter) continue;
 

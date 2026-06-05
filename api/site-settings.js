@@ -1,5 +1,6 @@
 import { getTursoClient } from './_lib/turso.js';
 import { readSessionFromRequest } from './_lib/session.js';
+import { resolveStoreAccess } from './_lib/access.js';
 
 /**
  * Per-store website settings, stored on the server so every customer who
@@ -25,26 +26,33 @@ async function ensureTable(client) {
 
 export default async function handler(req, res) {
     try {
-        const session = readSessionFromRequest(req);
-        if (!session || !session.storeId) {
-            res.status(401).json({ error: 'يجب تسجيل الدخول' });
-            return;
-        }
-
         const client = getTursoClient();
         await ensureTable(client);
 
         if (req.method === 'GET') {
+            // Public-readable per tenant (theme + order mode are needed before
+            // login on a 'direct'-mode store). Not sensitive.
+            const access = await resolveStoreAccess(req);
+            if (!access) {
+                res.status(401).json({ error: 'يجب تسجيل الدخول' });
+                return;
+            }
             const r = await client.execute({
                 sql: `SELECT settings_json FROM bws_site_settings WHERE store_id = ?`,
-                args: [session.storeId]
+                args: [access.storeId]
             });
             let settings = null;
             if (r.rows.length) {
                 try { settings = JSON.parse(r.rows[0].settings_json); } catch { settings = null; }
             }
-            res.setHeader('Cache-Control', 'private, max-age=10');
+            res.setHeader('Cache-Control', 'no-store');
             res.status(200).json({ settings });
+            return;
+        }
+
+        const session = readSessionFromRequest(req);
+        if (!session || !session.storeId) {
+            res.status(401).json({ error: 'يجب تسجيل الدخول' });
             return;
         }
 

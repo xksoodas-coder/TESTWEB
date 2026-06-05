@@ -1,5 +1,5 @@
 import { getTursoClient } from './_lib/turso.js';
-import { readSessionFromRequest } from './_lib/session.js';
+import { resolveReadAccess } from './_lib/access.js';
 import { familyImageUrl } from './_lib/r2.js';
 
 /**
@@ -16,8 +16,8 @@ export default async function handler(req, res) {
     }
 
     try {
-        const session = readSessionFromRequest(req);
-        if (!session || !session.storeId) {
+        const access = await resolveReadAccess(req);
+        if (!access) {
             res.status(401).json({ error: 'يجب تسجيل الدخول' });
             return;
         }
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         const client = getTursoClient();
         const result = await client.execute({
             sql: 'SELECT json_payload FROM turso_families WHERE store_id = ? LIMIT 1',
-            args: [session.storeId]
+            args: [access.storeId]
         });
 
         if (result.rows.length === 0) {

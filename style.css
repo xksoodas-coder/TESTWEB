@@ -468,6 +468,20 @@ img {
     display: none !important;
 }
 
+/* Direct-order mode: the action is a link styled like the add button. */
+a.add-cart-btn.order-btn {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+}
+
+/* Clickable product image + name → product detail page. */
+a.product-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
 /* ===== Favorite (heart) button — sits beside the add button ===== */
 .fav-btn {
     flex: 0 0 auto;

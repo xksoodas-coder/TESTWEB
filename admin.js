@@ -205,6 +205,8 @@ function wireSettingsPage() {
         displayProducts: document.getElementById('displayProducts'),
         pageSize: document.getElementById('pageSize'),
         pageSizeWrap: document.getElementById('pageSizeWrap'),
+        orderModeCart: document.getElementById('orderModeCart'),
+        orderModeDirect: document.getElementById('orderModeDirect'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
@@ -252,6 +254,8 @@ function wireSettingsPage() {
         if (s.displayMode === 'products') fields.displayProducts.checked = true;
         else fields.displayCategories.checked = true;
         if (fields.pageSize) fields.pageSize.value = s.pageSize || 25;
+        if (s.orderMode === 'direct') fields.orderModeDirect.checked = true;
+        else fields.orderModeCart.checked = true;
         syncPageSizeVisibility();
         updatePreview();
     }
@@ -281,7 +285,8 @@ function wireSettingsPage() {
             announcement: fields.announcement.value,
             cartMode: fields.cartModeSidebar.checked ? 'sidebar' : 'page',
             displayMode: fields.displayProducts.checked ? 'products' : 'categories',
-            pageSize
+            pageSize,
+            orderMode: fields.orderModeDirect.checked ? 'direct' : 'cart'
         };
 
         const btn = form.querySelector('button[type="submit"]');

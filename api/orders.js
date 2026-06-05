@@ -1,6 +1,7 @@
 import { randomUUID, createHash, createHmac } from 'node:crypto';
 import { getTursoClient } from './_lib/turso.js';
 import { readSessionFromRequest } from './_lib/session.js';
+import { resolveStoreAccess, getStoreSettings } from './_lib/access.js';
 
 // ─── Pusher Channels (same app the mobile listens on) ───
 // Lets the store's phones get a real-time notification when a customer places
@@ -83,22 +84,41 @@ async function ensureSchema(client) {
         `CREATE INDEX IF NOT EXISTS idx_bws_orders_customer
             ON bws_pending_orders(customer_uuid, created_at)`
     ], 'write');
+    // Guest-order fields (added incrementally — ignore "duplicate column").
+    for (const col of [
+        'wilaya TEXT', 'baladiya TEXT', 'delivery_type TEXT', 'is_guest INTEGER DEFAULT 0'
+    ]) {
+        try { await client.execute(`ALTER TABLE bws_pending_orders ADD COLUMN ${col}`); } catch { /* exists */ }
+    }
     _schemaReady = true;
 }
 
 export default async function handler(req, res) {
     try {
-        const session = readSessionFromRequest(req);
-        if (!session || !session.storeId) {
-            res.status(401).json({ error: 'يجب تسجيل الدخول' });
-            return;
-        }
-
         const client = getTursoClient();
         await ensureSchema(client);
 
         if (req.method === 'POST') {
-            const { items, notes, phone, name } = req.body || {};
+            // Logged-in customer OR a guest on a 'direct'-mode store.
+            const access = await resolveStoreAccess(req);
+            if (!access) {
+                res.status(401).json({ error: 'تعذّر تحديد المتجر' });
+                return;
+            }
+            const storeId = access.storeId;
+            const session = access.session; // undefined for guests
+            const isGuest = !session;
+
+            // A guest is only allowed when the store opted into 'direct' mode.
+            if (isGuest) {
+                const settings = await getStoreSettings(storeId);
+                if (settings.orderMode !== 'direct') {
+                    res.status(401).json({ error: 'يجب تسجيل الدخول' });
+                    return;
+                }
+            }
+
+            const { items, notes, phone, name, wilaya, baladiya, deliveryType } = req.body || {};
             if (!Array.isArray(items) || items.length === 0) {
                 res.status(400).json({ error: 'السلة فارغة' });
                 return;
@@ -118,22 +138,38 @@ export default async function handler(req, res) {
                 return;
             }
 
-            // Anti-spam: only authenticated customers reach here, and each
-            // customer is capped at a small number of pending orders so nobody
-            // can flood the store's order table.
-            if (session.customerUuid) {
-                const cntRes = await client.execute({
+            const custName = (name || (session && session.name) || '').toString().trim().slice(0, 200);
+            const custPhone = (phone || (session && session.phone) || '').toString().trim().slice(0, 50);
+            const w = (wilaya || '').toString().trim().slice(0, 100);
+            const b = (baladiya || '').toString().trim().slice(0, 100);
+            const delivery = (deliveryType === 'office') ? 'office' : 'home';
+
+            // Guest orders must carry a name + phone (no account to fall back on).
+            if (isGuest && (!custName || !custPhone)) {
+                res.status(400).json({ error: 'الرجاء إدخال الاسم ورقم الهاتف' });
+                return;
+            }
+
+            // Anti-spam: cap pending orders per customer (logged-in) or per phone (guest).
+            let cntRes;
+            if (session && session.customerUuid) {
+                cntRes = await client.execute({
                     sql: `SELECT COUNT(*) AS c FROM bws_pending_orders
                           WHERE store_id = ? AND customer_uuid = ? AND status = 'pending'`,
-                    args: [session.storeId, session.customerUuid]
+                    args: [storeId, session.customerUuid]
                 });
-                const pendingCount = Number(cntRes.rows[0]?.c || 0);
-                if (pendingCount >= 20) {
-                    res.status(429).json({
-                        error: 'لديك عدد كبير من الطلبيات المعلقة. انتظر حتى تتم معالجتها قبل إرسال طلب جديد.'
-                    });
-                    return;
-                }
+            } else if (custPhone) {
+                cntRes = await client.execute({
+                    sql: `SELECT COUNT(*) AS c FROM bws_pending_orders
+                          WHERE store_id = ? AND customer_phone = ? AND status = 'pending'`,
+                    args: [storeId, custPhone]
+                });
+            }
+            if (cntRes && Number(cntRes.rows[0]?.c || 0) >= 20) {
+                res.status(429).json({
+                    error: 'عدد كبير من الطلبيات المعلقة. انتظر حتى تتم معالجتها قبل إرسال طلب جديد.'
+                });
+                return;
             }
 
             const total = cleanItems.reduce((s, it) => s + it.price * it.quantity, 0);
@@ -143,29 +179,34 @@ export default async function handler(req, res) {
             await client.execute({
                 sql: `INSERT INTO bws_pending_orders
                       (uuid, store_id, customer_uuid, customer_name, customer_phone,
-                       items_json, total, status, notes, created_at)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+                       items_json, total, status, notes, created_at,
+                       wilaya, baladiya, delivery_type, is_guest)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
                 args: [
                     orderUuid,
-                    session.storeId,
-                    session.customerUuid || null,
-                    (name || session.name || '').toString().slice(0, 200),
-                    (phone || session.phone || '').toString().slice(0, 50),
+                    storeId,
+                    (session && session.customerUuid) || null,
+                    custName,
+                    custPhone,
                     JSON.stringify(cleanItems),
                     total,
                     (notes || '').toString().slice(0, 1000),
-                    createdAt
+                    createdAt,
+                    w, b, delivery, isGuest ? 1 : 0
                 ]
             });
 
             // Real-time push to the store's devices (best-effort).
-            await notifyNewOrder(
-                session.storeId,
-                (name || session.name || '').toString(),
-                total
-            );
+            await notifyNewOrder(storeId, custName, total);
 
             res.status(201).json({ ok: true, uuid: orderUuid, total, status: 'pending', createdAt });
+            return;
+        }
+
+        // GET — the logged-in customer's own orders (requires a session).
+        const session = readSessionFromRequest(req);
+        if (!session || !session.storeId) {
+            res.status(401).json({ error: 'يجب تسجيل الدخول' });
             return;
         }
 
