@@ -15,9 +15,12 @@ export default async function handler(req, res) {
         return;
     }
     try {
+        // The response depends on the request Host / ?store= — must NOT be cached
+        // by a shared CDN (would risk serving one store's identity to another).
+        res.setHeader('Cache-Control', 'no-store');
+
         const t = await resolveTenant(req);
         if (!t) {
-            res.setHeader('Cache-Control', 'public, max-age=15');
             res.status(200).json({ found: false });
             return;
         }
@@ -25,7 +28,6 @@ export default async function handler(req, res) {
             res.status(200).json({ found: true, active: false, name: t.name });
             return;
         }
-        res.setHeader('Cache-Control', 'public, max-age=30');
         res.status(200).json({
             found: true,
             active: true,

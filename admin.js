@@ -34,17 +34,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ===== Login =====
-function wireLogin() {
+async function wireLogin() {
     if (BWS.isAdminAuthed()) {
         window.location.href = 'admin-dashboard.html';
         return;
     }
+
+    // If the store is known from the link/domain, hide the store-code field —
+    // the server resolves the store from the tenant.
+    let tenantActive = false;
+    try {
+        const tenant = await BWS.resolveTenant();
+        tenantActive = tenant && tenant.found && tenant.active;
+        if (tenantActive) {
+            const grp = document.getElementById('adminStoreIdGroup');
+            if (grp) grp.style.display = 'none';
+            const nameEl = document.getElementById('adminTenantName');
+            if (nameEl && tenant.name) { nameEl.textContent = tenant.name; nameEl.hidden = false; }
+        }
+    } catch { /* platform host → keep store-code field */ }
+
     const form = document.getElementById('loginForm');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
-        const storeId = document.getElementById('storeId').value.trim();
+        const storeId = tenantActive ? '' : document.getElementById('storeId').value.trim();
         const err = document.getElementById('loginError');
         err.hidden = true;
 
