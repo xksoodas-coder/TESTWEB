@@ -399,12 +399,30 @@ function renderRelatedProducts(excludeUuid) {
     const section = document.getElementById('orderRelatedSection');
     if (!container || !section) return;
 
-    // Get products excluding the selected one, limit to 4
-    const related = _allProducts
-        .filter(p => p.uuid !== excludeUuid && p.available && p.quantity > 0)
-        .slice(0, 4);
+    // Show the rest of the products from the SAME category (family) as the
+    // selected product, excluding the one currently displayed. No limit.
+    const family = _selectedProduct && _selectedProduct.family;
+    let related = [];
+    if (family) {
+        related = _allProducts.filter(p =>
+            p.uuid !== excludeUuid &&
+            p.available && p.quantity > 0 &&
+            p.family === family
+        );
+    }
+
+    // Fallback: if the category has no other products, show other available ones.
+    if (related.length === 0) {
+        related = _allProducts
+            .filter(p => p.uuid !== excludeUuid && p.available && p.quantity > 0)
+            .slice(0, 4);
+    }
 
     if (related.length === 0) return;
+
+    // Update the heading to reflect that these belong to the same category.
+    const titleEl = section.querySelector('.related-title');
+    if (titleEl && family) titleEl.textContent = 'منتجات أخرى من نفس التصنيف';
 
     section.style.display = '';
     container.innerHTML = related.map(p => {
