@@ -356,11 +356,14 @@
     background: #fafafa;
 }
 
-/* --- Right column: Product image --- */
+/* --- Right column: Product image (sticky on scroll) --- */
 .order-right-col {
     display: flex;
     align-items: flex-start;
     justify-content: center;
+    position: sticky;
+    top: 90px; /* header height ~88px */
+    align-self: start;
 }
 
 .order-product-image {
@@ -392,6 +395,47 @@
 
 .order-product-image .category-placeholder {
     font-size: 80px;
+}
+
+/* ---------- Sticky header product info bar ---------- */
+.header-product-bar {
+    display: none;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.header-product-bar .hpb-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.header-product-bar .hpb-price {
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+}
+
+/* When header is in product-info mode */
+.main-header.header-scrolled .main-nav,
+.main-header.header-scrolled .header-left {
+    display: none;
+}
+
+.main-header.header-scrolled .header-product-bar {
+    display: flex;
+}
+
+.main-header.header-scrolled .header-container {
+    transition: background-color 0.25s ease;
 }
 
 /* ---------- Related products ---------- */
@@ -526,9 +570,10 @@
         gap: 20px;
     }
 
-    /* On mobile: image first, then form */
+    /* On mobile: image first, then form — disable sticky */
     .order-right-col {
         order: -1;
+        position: static;
     }
 
     .order-product-image {

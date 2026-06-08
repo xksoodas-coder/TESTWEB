@@ -221,6 +221,40 @@ function renderOrderPage() {
     bindSubmit();
     bindWilayaChange();
     bindImageZoom();
+    initScrollHeader(p, price);
+}
+
+// Populate & observe: when product title scrolls behind the header,
+// switch the header to show product name + price.
+function initScrollHeader(product, price) {
+    const header = document.querySelector('.main-header');
+    const titleEl = document.querySelector('.order-product-title');
+    const hpbName = document.getElementById('hpbName');
+    const hpbPrice = document.getElementById('hpbPrice');
+    if (!header || !titleEl || !hpbName || !hpbPrice || !product) return;
+
+    // Fill in the product info
+    hpbName.textContent = product.name || '';
+    hpbPrice.textContent = BWS.formatPrice(price);
+
+    // Use IntersectionObserver to detect when the title leaves the viewport
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                // Title is hidden behind the header → show product bar
+                header.classList.add('header-scrolled');
+            } else {
+                // Title is visible → restore normal header
+                header.classList.remove('header-scrolled');
+            }
+        });
+    }, {
+        // Account for the sticky header height
+        rootMargin: '-90px 0px 0px 0px',
+        threshold: 0
+    });
+
+    observer.observe(titleEl);
 }
 
 // Zoom on hover: enlarge the product image and follow the mouse,
