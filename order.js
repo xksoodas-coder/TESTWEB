@@ -220,6 +220,29 @@ function renderOrderPage() {
     bindQtyControls();
     bindSubmit();
     bindWilayaChange();
+    bindImageZoom();
+}
+
+// Zoom on hover: enlarge the product image and follow the mouse,
+// reset to normal when the mouse leaves (like commercial product pages).
+function bindImageZoom() {
+    const box = document.querySelector('.order-product-image');
+    if (!box) return;
+    const img = box.querySelector('img');
+    if (!img) return; // no zoom for the placeholder
+
+    box.addEventListener('mousemove', (e) => {
+        const rect = box.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        img.style.transformOrigin = `${x}% ${y}%`;
+        box.classList.add('zoom-active');
+    });
+
+    box.addEventListener('mouseleave', () => {
+        box.classList.remove('zoom-active');
+        img.style.transformOrigin = 'center center';
+    });
 }
 
 function bindSummaryToggle() {

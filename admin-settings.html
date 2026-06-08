@@ -181,6 +181,57 @@
                 </div>
             </div>
 
+            <!-- Products per row -->
+            <div class="admin-card">
+                <h2>عدد المنتجات في كل سطر</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    اختر عدد المنتجات المعروضة في كل سطر. كلما قلّ العدد كبُر حجم بطاقة المنتج.
+                </p>
+
+                <div class="products-per-row-options" id="productsPerRowOptions">
+                    <label class="ppr-option">
+                        <input type="radio" name="productsPerRow" value="4" id="ppr4">
+                        <div class="ppr-preview">
+                            <div class="ppr-grid ppr-grid-4">
+                                <span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <strong>4 منتجات</strong>
+                        <p class="muted">حجم كبير</p>
+                    </label>
+                    <label class="ppr-option">
+                        <input type="radio" name="productsPerRow" value="5" id="ppr5">
+                        <div class="ppr-preview">
+                            <div class="ppr-grid ppr-grid-5">
+                                <span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <strong>5 منتجات</strong>
+                        <p class="muted">حجم متوسط-كبير</p>
+                    </label>
+                    <label class="ppr-option">
+                        <input type="radio" name="productsPerRow" value="6" id="ppr6">
+                        <div class="ppr-preview">
+                            <div class="ppr-grid ppr-grid-6">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <strong>6 منتجات</strong>
+                        <p class="muted">حجم متوسط</p>
+                    </label>
+                    <label class="ppr-option">
+                        <input type="radio" name="productsPerRow" value="7" id="ppr7">
+                        <div class="ppr-preview">
+                            <div class="ppr-grid ppr-grid-7">
+                                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <strong>7 منتجات</strong>
+                        <p class="muted">حجم صغير (افتراضي)</p>
+                    </label>
+                </div>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="primary-btn">حفظ الإعدادات</button>
                 <button type="button" class="ghost-btn" id="resetSettingsBtn">إعادة إلى الافتراضي</button>

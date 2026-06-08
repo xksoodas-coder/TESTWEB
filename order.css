@@ -374,12 +374,20 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+    cursor: zoom-in;
 }
 
 .order-product-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform-origin: center center;
+    transition: transform 0.18s ease-out;
+}
+
+.order-product-image.zoom-active img {
+    transform: scale(2.2);
+    transition: transform 0.05s ease-out;
 }
 
 .order-product-image .category-placeholder {

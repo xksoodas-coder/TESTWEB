@@ -48,7 +48,9 @@ const BWS = (function () {
         pageSize: 25,
         // Order flow: 'cart' (default) = login + add-to-cart for registered
         // customers; 'direct' = public guest ordering via a landing form.
-        orderMode: 'cart'
+        orderMode: 'cart',
+        // Products per row in the grid (4, 5, 6, or 7). Fewer = larger cards.
+        productsPerRow: 7
     };
 
     // In-memory cache, refilled per page load.
@@ -78,7 +80,9 @@ const BWS = (function () {
             displayMode: raw.displayMode === 'products' ? 'products' : 'categories',
             pageSize: Number.isFinite(pageSize) && pageSize > 0
                 ? Math.min(200, Math.floor(pageSize)) : DEFAULT_SETTINGS.pageSize,
-            orderMode: raw.orderMode === 'direct' ? 'direct' : 'cart'
+            orderMode: raw.orderMode === 'direct' ? 'direct' : 'cart',
+            productsPerRow: [4, 5, 6, 7].includes(Number(raw.productsPerRow))
+                ? Number(raw.productsPerRow) : DEFAULT_SETTINGS.productsPerRow
         };
     }
     function setSettings(next) {

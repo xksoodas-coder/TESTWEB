@@ -321,6 +321,10 @@ function wireSettingsPage() {
         pageSizeWrap: document.getElementById('pageSizeWrap'),
         orderModeCart: document.getElementById('orderModeCart'),
         orderModeDirect: document.getElementById('orderModeDirect'),
+        ppr4: document.getElementById('ppr4'),
+        ppr5: document.getElementById('ppr5'),
+        ppr6: document.getElementById('ppr6'),
+        ppr7: document.getElementById('ppr7'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
@@ -370,6 +374,8 @@ function wireSettingsPage() {
         if (fields.pageSize) fields.pageSize.value = s.pageSize || 25;
         if (s.orderMode === 'direct') fields.orderModeDirect.checked = true;
         else fields.orderModeCart.checked = true;
+        const pprField = fields['ppr' + (s.productsPerRow || 7)];
+        if (pprField) pprField.checked = true;
         syncPageSizeVisibility();
         updatePreview();
     }
@@ -400,7 +406,8 @@ function wireSettingsPage() {
             cartMode: fields.cartModeSidebar.checked ? 'sidebar' : 'page',
             displayMode: fields.displayProducts.checked ? 'products' : 'categories',
             pageSize,
-            orderMode: fields.orderModeDirect.checked ? 'direct' : 'cart'
+            orderMode: fields.orderModeDirect.checked ? 'direct' : 'cart',
+            productsPerRow: Number(document.querySelector('input[name="productsPerRow"]:checked')?.value || 7)
         };
 
         const btn = form.querySelector('button[type="submit"]');

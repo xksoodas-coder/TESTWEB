@@ -359,7 +359,7 @@ img {
 /* ===== Products Grid ===== */
 .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+    grid-template-columns: repeat(var(--products-per-row, 7), 1fr);
     gap: 10px;
 }
 
@@ -1367,7 +1367,7 @@ a.product-link {
     }
 
     .products-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
     }
 
