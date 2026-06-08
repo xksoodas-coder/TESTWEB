@@ -556,7 +556,7 @@ async function renderAllProductsMode(grid, pageSize) {
 
 function renderImageOrPlaceholder(src, fallbackText) {
     if (src) {
-        return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallbackText)}'))">`;
+        return `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallbackText)}'))">`;
     }
     return `<div class="category-placeholder">${escapeHtml(fallbackText)}</div>`;
 }

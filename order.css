@@ -15,6 +15,17 @@
     grid-template-columns: 1fr 1fr;
     gap: 28px;
     align-items: start;
+    transition: opacity 0.14s ease;
+}
+
+/* Quick fade while switching products client-side (no page reload). */
+.order-top-section.swapping {
+    opacity: 0.35;
+}
+
+/* Hide the badge container until a description is loaded. */
+.order-product-badges:empty {
+    display: none;
 }
 
 /* --- Left column: product info + form + summary --- */

@@ -33,13 +33,27 @@ function makePlaceholder(text) {
 }
 window.makePlaceholder = makePlaceholder;
 
-function imageOrPlaceholder(src, fallback) {
+function imageOrPlaceholder(src, fallback, opts = {}) {
     if (src) {
-        // On load failure, fall back to the colored first-letter placeholder
-        // (site color) instead of leaving an empty box.
-        return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallback)}'))">`;
+        // Hero image loads eagerly with high priority; thumbnails lazy-load.
+        // On load failure, fall back to the colored first-letter placeholder.
+        const attrs = opts.lazy
+            ? 'loading="lazy" decoding="async"'
+            : 'decoding="async" fetchpriority="high"';
+        return `<img src="${escapeHtml(src)}" alt="" ${attrs} onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallback)}'))">`;
     }
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
+}
+
+// Build the short-description badge markup (one badge per non-empty line).
+function badgesHtml(text) {
+    if (!text) return '';
+    return text.split('\n').filter(l => l.trim())
+        .map(l => `<span class="order-badge">${escapeHtml(l.trim())}</span>`).join('');
+}
+function setBadges(text) {
+    const el = document.getElementById('orderBadges');
+    if (el) el.innerHTML = badgesHtml(text);
 }
 
 // ---- State ----
@@ -82,22 +96,140 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await applyBranding();
 
-    // Load products
-    try {
-        const r = await BWS.fetchAllProducts({ page: 1, pageSize: 1000 });
-        _allProducts = r.products || [];
-    } catch { /* empty */ }
-
-    const selUuid = (new URLSearchParams(location.search).get('product') || '').trim();
-    _selectedProduct = _allProducts.find(p => p.uuid === selUuid) || null;
-
-    if (_selectedProduct && _selectedProduct.available) {
-        _currentQty = 1;
+    // ----- Load catalog (stale-while-revalidate) -----
+    // Paint instantly from the cached catalog when available, then revalidate
+    // in the background so switching products feels instant on later visits.
+    const cached = BWS.getCachedCatalog();
+    if (cached && cached.length) {
+        _allProducts = cached;
+        renderInitial();
+        if (!BWS.catalogIsFresh()) {
+            BWS.fetchCatalog({ force: true })
+                .then(fresh => { _allProducts = fresh; refreshAfterCatalog(); })
+                .catch(() => {});
+        }
+    } else {
+        try { _allProducts = await BWS.fetchCatalog({ force: true }); }
+        catch { _allProducts = []; }
+        renderInitial();
     }
 
+    // Client-side navigation: intercept related-product clicks + back/forward.
+    bindRelatedNav();
+    window.addEventListener('popstate', onPopState);
+});
+
+// ---- Initial paint from the current ?product= in the URL ----
+let _initialRendered = false;
+function renderInitial() {
+    const selUuid = (new URLSearchParams(location.search).get('product') || '').trim();
+    _selectedProduct = _allProducts.find(p => p.uuid === selUuid) || null;
+    _currentQty = 1;
     renderOrderPage();
     renderRelatedProducts(selUuid);
-});
+    enrichSelected(_selectedProduct);
+    _initialRendered = true;
+}
+
+// ---- Background catalog refresh: update stock/price + related list only,
+// never the form the customer may be filling. ----
+function refreshAfterCatalog() {
+    if (_selectedProduct) {
+        const updated = _allProducts.find(p => p.uuid === _selectedProduct.uuid);
+        if (updated) {
+            updated.shortDescription = _selectedProduct.shortDescription;
+            updated.description = _selectedProduct.description;
+            updated._enriched = _selectedProduct._enriched;
+            _selectedProduct = updated;
+            const priceEl = document.querySelector('.order-product-price');
+            if (priceEl) priceEl.textContent = BWS.formatPrice(BWS.effectivePrice(updated));
+        }
+    }
+    renderRelatedProducts(_selectedProduct ? _selectedProduct.uuid : '');
+}
+
+// ---- Instant client-side switch to another product (no page reload) ----
+function selectProduct(uuid, { push = true } = {}) {
+    const p = _allProducts.find(x => x.uuid === uuid);
+    if (!p) return;
+
+    const form = captureForm();        // keep what the customer already typed
+    _selectedProduct = p;
+    _currentQty = 1;
+
+    if (push) {
+        history.pushState({ uuid },
+            '', withStore('order.html?product=' + encodeURIComponent(uuid)));
+    }
+
+    const section = document.getElementById('orderTopSection');
+    if (section) section.classList.add('swapping');
+    renderOrderPage();                 // rebuilds + rebinds the top section
+    restoreForm(form);
+    renderRelatedProducts(uuid);
+    enrichSelected(p);
+    if (section) requestAnimationFrame(() => section.classList.remove('swapping'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function onPopState() {
+    const uuid = (new URLSearchParams(location.search).get('product') || '').trim();
+    if (uuid) selectProduct(uuid, { push: false });
+}
+
+// Lazily load the selected product's description/badges (cached per uuid).
+async function enrichSelected(p) {
+    if (!p) return;
+    if (p._enriched) { setBadges(p.shortDescription); return; }
+    try {
+        const d = await BWS.fetchProductDetailCached(p.uuid);
+        if (!d) return;
+        p.shortDescription = d.shortDescription || '';
+        p.description = d.description || '';
+        p._enriched = true;
+        if (_selectedProduct && _selectedProduct.uuid === p.uuid) {
+            setBadges(p.shortDescription);
+        }
+    } catch { /* keep the basic cached info */ }
+}
+
+// Capture / restore the order form across product switches.
+function captureForm() {
+    const g = id => (document.getElementById(id) || {}).value || '';
+    return {
+        name: g('ofName'), phone: g('ofPhone'), wilaya: g('ofWilaya'),
+        baladiya: g('ofBaladiya'), delivery: g('ofDelivery'), notes: g('ofNotes')
+    };
+}
+function restoreForm(v) {
+    if (!v) return;
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    set('ofName', v.name); set('ofPhone', v.phone); set('ofNotes', v.notes);
+    const wil = document.getElementById('ofWilaya');
+    if (wil && v.wilaya) {
+        wil.value = v.wilaya;
+        populateBaladiyas(wil, document.getElementById('ofBaladiya'));
+        const bal = document.getElementById('ofBaladiya');
+        if (bal && v.baladiya) bal.value = v.baladiya;
+    }
+    set('ofDelivery', v.delivery);
+}
+
+// Delegate clicks on related cards to client-side navigation (bound once).
+function bindRelatedNav() {
+    const container = document.getElementById('relatedProducts');
+    if (!container || container._navBound) return;
+    container._navBound = true;
+    container.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // new-tab etc.
+        const card = e.target.closest('.related-card');
+        if (!card) return;
+        const uuid = card.getAttribute('data-uuid');
+        if (!uuid) return;
+        e.preventDefault();
+        selectProduct(uuid, { push: true });
+    });
+}
 
 async function applyBranding() {
     let info;
@@ -133,11 +265,7 @@ function renderOrderPage() {
         <!-- Left column: info + form + summary -->
         <div class="order-left-col">
             <h1 class="order-product-title">${escapeHtml(p.name)}</h1>
-            ${p.shortDescription ? `<div class="order-product-badges">${
-                p.shortDescription.split('\n').filter(l => l.trim()).map(l =>
-                    `<span class="order-badge">${escapeHtml(l.trim())}</span>`
-                ).join('')
-            }</div>` : ''}
+            <div class="order-product-badges" id="orderBadges">${badgesHtml(p.shortDescription)}</div>
             <div class="order-product-price">${BWS.formatPrice(price)}</div>
             <div class="order-product-stars">★★★★★</div>
 
@@ -457,9 +585,9 @@ function renderRelatedProducts(excludeUuid) {
         const price = BWS.effectivePrice(p);
         const href = withStore('order.html?product=' + encodeURIComponent(p.uuid));
         return `
-            <a class="related-card" href="${escapeHtml(href)}">
+            <a class="related-card" href="${escapeHtml(href)}" data-uuid="${escapeHtml(p.uuid)}">
                 <div class="related-card-img">
-                    ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+                    ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0), { lazy: true })}
                 </div>
                 <div class="related-card-body">
                     <div class="related-card-name">${escapeHtml(p.name)}</div>

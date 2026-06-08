@@ -58,6 +58,28 @@ const BWS = (function () {
     let _storeInfoCache = null;
     const _productsByFamily = new Map();
 
+    // ----- catalog (full product list) cache, stale-while-revalidate -----
+    // Served instantly from memory → sessionStorage, refreshed in the
+    // background. Stock is re-validated server-side at order time, so brief
+    // staleness here is safe. Image URLs are versioned (immutable) so the
+    // browser HTTP cache handles the images themselves.
+    const CATALOG_TTL = 120000; // 2 min freshness window
+    let _catalogCache = null;   // { products, ts }
+    const _productDetailCache = new Map(); // uuid -> detail object
+    function _catalogKey() { return 'bws_catalog_' + (getTenantSlug() || '_'); }
+    function _readSessionCatalog() {
+        try {
+            const obj = JSON.parse(sessionStorage.getItem(_catalogKey()) || 'null');
+            return (obj && Array.isArray(obj.products)) ? obj : null;
+        } catch { return null; }
+    }
+    function _writeCatalog(products) {
+        _catalogCache = { products, ts: Date.now() };
+        try { sessionStorage.setItem(_catalogKey(), JSON.stringify(_catalogCache)); }
+        catch { /* sessionStorage quota — keep memory cache only */ }
+        return products;
+    }
+
     // ----- small storage helpers -----
     function readJSON(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; }
@@ -322,6 +344,35 @@ const BWS = (function () {
                 { method: 'GET' }
             );
             return { products: data.products || [], total: Number(data.total || 0) };
+        },
+
+        // ----- full catalog (stale-while-revalidate) -----
+        // Synchronous best-effort read (memory → sessionStorage). May be stale.
+        getCachedCatalog() {
+            if (_catalogCache) return _catalogCache.products;
+            const s = _readSessionCatalog();
+            if (s) { _catalogCache = s; return s.products; }
+            return null;
+        },
+        catalogIsFresh() {
+            const c = _catalogCache || _readSessionCatalog();
+            return !!(c && (Date.now() - c.ts) < CATALOG_TTL);
+        },
+        // Fetch the whole catalog. Returns the fresh cache instantly when valid;
+        // pass { force: true } to always hit the network (background refresh).
+        async fetchCatalog({ force = false } = {}) {
+            if (!force && this.catalogIsFresh()) return this.getCachedCatalog();
+            const data = await apiFetch('/api/products?limit=1000&offset=0', { method: 'GET' });
+            return _writeCatalog(data.products || []);
+        },
+
+        // Single-product detail with an in-memory cache (descriptions, etc.).
+        async fetchProductDetailCached(uuid) {
+            if (!uuid) return null;
+            if (_productDetailCache.has(uuid)) return _productDetailCache.get(uuid);
+            const detail = await this.fetchProductDetail(uuid);
+            _productDetailCache.set(uuid, detail);
+            return detail;
         },
 
         // ----- cart -----
