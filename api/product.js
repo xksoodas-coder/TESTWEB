@@ -5,10 +5,11 @@ import { productImageUrl } from './_lib/r2.js';
 /**
  * GET /api/product?uuid=<recordUuid>
  *
- * Returns the FULL detail of a single product — including the short and full
- * descriptions — by reading ONLY that product's changelog rows (not the whole
- * catalogue). The product list endpoint never returns descriptions, so they are
- * fetched lazily, only when a customer opens a specific product.
+ * Returns the FULL detail of a single product by reading ONLY that product's
+ * changelog rows (not the whole catalogue). The short/full descriptions are
+ * NOT in the changelog (the apps don't author them) — they live in the
+ * website-only bws_product_descriptions table and are merged in here, fetched
+ * lazily only when a customer opens a specific product.
  */
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -59,12 +60,27 @@ export default async function handler(req, res) {
 
         const qty = Number(full.totalQuantity ?? 0) + deltaAfter;
         const imageVersion = full.imageVersion ?? '';
+
+        // Descriptions are website-only — read them from their own table.
+        let shortDescription = '', description = '';
+        try {
+            const d = await client.execute({
+                sql: `SELECT short_desc, full_desc FROM bws_product_descriptions
+                      WHERE store_id = ? AND product_uuid = ?`,
+                args: [access.storeId, uuid]
+            });
+            if (d.rows.length) {
+                shortDescription = d.rows[0].short_desc || '';
+                description = d.rows[0].full_desc || '';
+            }
+        } catch { /* table may not exist yet → no descriptions */ }
+
         res.setHeader('Cache-Control', 'private, max-age=30');
         res.status(200).json({
             uuid,
             name: full.name ?? '',
-            shortDescription: full.shortDescription ?? '',
-            description: full.description ?? '',
+            shortDescription,
+            description,
             price: Number(full.sellPrice ?? 0),
             price1: Number(full.sellPrice ?? 0),
             price2: Number(full.wholesalePrice ?? 0),

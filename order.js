@@ -1,6 +1,6 @@
 /*
  * BigWebStore — صفحة الطلب المباشر (زبون عابر، بلا تسجيل دخول).
- * تُستعمل عندما يكون وضع المتجر "direct".
+ * تصميم حديث يشبه صفحة المنتج مع نموذج الطلب وملخص الطلبية.
  */
 function withStore(url) {
     try {
@@ -32,8 +32,14 @@ function imageOrPlaceholder(src, fallback) {
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
 }
 
+// ---- State ----
+let _selectedProduct = null;
+let _allProducts = [];
+let _currentQty = 1;
+let _summaryOpen = true;
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // Theme from cached settings.
+    // Theme
     const applyTheme = () => {
         const s = BWS.getSettings();
         const root = document.documentElement;
@@ -49,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     applyTheme();
 
-    // Resolve the store from the link and confirm it is in direct mode.
+    // Resolve tenant
     const tenant = await BWS.resolveTenant();
     if (tenant && tenant.found && tenant.active === false) {
         document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;'
@@ -66,28 +72,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await applyBranding();
 
-    // Wilayas dropdown.
-    const wilSel = document.getElementById('ofWilaya');
-    wilSel.innerHTML = '<option value="">اختر الولاية</option>'
-        + (window.BWS_WILAYAS || []).map(w => `<option>${escapeHtml(w)}</option>`).join('');
-
-    // Load products.
-    let products = [];
+    // Load products
     try {
         const r = await BWS.fetchAllProducts({ page: 1, pageSize: 1000 });
-        products = r.products || [];
-    } catch { /* show empty */ }
+        _allProducts = r.products || [];
+    } catch { /* empty */ }
 
-    const qty = new Map();
     const selUuid = (new URLSearchParams(location.search).get('product') || '').trim();
-    const selProduct = products.find(p => p.uuid === selUuid);
-    if (selProduct && selProduct.available) qty.set(selUuid, 1);
+    _selectedProduct = _allProducts.find(p => p.uuid === selUuid) || null;
 
-    renderHero(selProduct);
-    renderProducts(products, qty, selUuid);
-    updateTotal(products, qty);
+    if (_selectedProduct && _selectedProduct.available) {
+        _currentQty = 1;
+    }
 
-    document.getElementById('orderSubmit').addEventListener('click', () => submitOrder(products, qty));
+    renderOrderPage();
+    renderRelatedProducts(selUuid);
 });
 
 async function applyBranding() {
@@ -100,124 +99,269 @@ async function applyBranding() {
             el.classList.add('has-logo');
         });
     }
-    if (info.name) document.title = info.name;
+    if (info.name) document.title = info.name + ' — الطلب';
 }
 
-function renderHero(product) {
-    const hero = document.getElementById('orderHero');
-    if (!product) {
-        hero.innerHTML = '<div class="order-hero-note">اختر المنتجات وكمياتها من الأسفل ثم أكمل الطلب.</div>';
+function renderOrderPage() {
+    const section = document.getElementById('orderTopSection');
+    const p = _selectedProduct;
+
+    if (!p) {
+        section.innerHTML = `
+            <div style="grid-column:1/-1;text-align:center;padding:60px 20px">
+                <h2 style="color:var(--text-dark);margin-bottom:8px">لم يتم اختيار منتج</h2>
+                <p style="color:var(--text-muted)">يرجى اختيار منتج من المتجر أولاً</p>
+                <a href="${withStore('index.html')}" class="checkout-btn" style="display:inline-block;text-decoration:none;margin-top:14px;width:auto;padding:12px 32px">العودة إلى المتجر</a>
+            </div>`;
         return;
     }
-    hero.innerHTML = `
-        <div class="order-hero-img">
-            ${imageOrPlaceholder(product.imageUrl, (product.name || '?').charAt(0))}
+
+    const price = BWS.effectivePrice(p);
+    const wilayas = (window.BWS_WILAYAS || []);
+
+    section.innerHTML = `
+        <!-- Left column: info + form + summary -->
+        <div class="order-left-col">
+            <h1 class="order-product-title">${escapeHtml(p.name)}</h1>
+            ${p.shortDescription ? `<div class="order-product-badges">${
+                p.shortDescription.split('\n').filter(l => l.trim()).map(l =>
+                    `<span class="order-badge">${escapeHtml(l.trim())}</span>`
+                ).join('')
+            }</div>` : ''}
+            <div class="order-product-price">${BWS.formatPrice(price)}</div>
+            <div class="order-product-stars">★★★★★</div>
+
+            <div class="order-instruction">
+                للطلب أدخل معلوماتك في الخانات أسفله <span class="emoji">👇</span> .. ثم إضغط على زر "<strong>تأكيد الطلب</strong>"
+            </div>
+
+            <form id="orderForm" class="order-form" autocomplete="on">
+                <div class="of-row">
+                    <div class="of-field">
+                        <input type="text" id="ofName" placeholder="الإسم الأول" required>
+                    </div>
+                    <div class="of-field">
+                        <input type="tel" id="ofPhone" inputmode="tel" placeholder="رقم الهاتف" required>
+                    </div>
+                </div>
+                <div class="of-row">
+                    <div class="of-field">
+                        <select id="ofWilaya" required>
+                            <option value="">الولاية</option>
+                            ${wilayas.map(w => `<option>${escapeHtml(w)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="of-field">
+                        <select id="ofBaladiya">
+                            <option value="">بلدية</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="of-row">
+                    <div class="of-field">
+                        <select id="ofDelivery">
+                            <option value="home">طريقة التسليم</option>
+                            <option value="home">🏠 توصيل إلى المنزل</option>
+                            <option value="office">🏢 توصيل إلى المكتب</option>
+                        </select>
+                    </div>
+                    <div class="of-field">
+                        <input type="text" id="ofNotes" placeholder="ملاحظة (إختيارية)">
+                    </div>
+                </div>
+            </form>
+
+            <!-- Order Summary -->
+            <div class="order-summary-section">
+                <button type="button" class="order-summary-toggle" id="summaryToggle">
+                    <span><span class="summary-cart-icon">🛒</span> ملخص الطلبية</span>
+                    <span class="toggle-icon open" id="toggleIcon">▲</span>
+                </button>
+                <div class="order-summary-body" id="summaryBody">
+                    <div class="summary-item" id="summaryItemRow">
+                        <span class="summary-item-name">
+                            ${escapeHtml(p.name)}
+                            <span class="summary-qty-badge" id="summaryQtyBadge">x${_currentQty}</span>
+                        </span>
+                        <span class="summary-item-price" id="summaryItemPrice">${BWS.formatPrice(price * _currentQty)}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-row-label">🚚 سعر التوصيل</span>
+                        <span class="summary-row-value" id="summaryDelivery">اختر ولاية التسليم</span>
+                    </div>
+                    <div class="summary-row total-row">
+                        <span class="summary-row-label">الثمن الإجمالي</span>
+                        <span class="summary-row-value" id="summaryTotal">${BWS.formatPrice(price * _currentQty)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action bar -->
+            <div class="order-action-bar">
+                <button type="button" class="order-submit-btn" id="orderSubmit">اضغط هنا للطلب</button>
+                <div class="order-qty-controls">
+                    <button type="button" class="order-qty-btn" id="qtyDec" aria-label="تقليل">−</button>
+                    <span class="order-qty-value" id="qtyValue">${_currentQty}</span>
+                    <button type="button" class="order-qty-btn" id="qtyInc" aria-label="زيادة">+</button>
+                </div>
+            </div>
         </div>
-        <div class="order-hero-info">
-            <h1>${escapeHtml(product.name)}</h1>
-            <div class="order-hero-price">${BWS.formatPrice(BWS.effectivePrice(product))}</div>
+
+        <!-- Right column: product image -->
+        <div class="order-right-col">
+            <div class="order-product-image">
+                ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+            </div>
         </div>
     `;
+
+    // Bind events
+    bindSummaryToggle();
+    bindQtyControls();
+    bindSubmit();
+    bindWilayaChange();
 }
 
-function renderProducts(products, qty, selUuid) {
-    const container = document.getElementById('orderProducts');
-    if (products.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>لا توجد منتجات.</p></div>';
-        return;
-    }
-    // Selected product first.
-    const ordered = products.slice().sort((a, b) =>
-        (a.uuid === selUuid ? -1 : 0) - (b.uuid === selUuid ? -1 : 0));
+function bindSummaryToggle() {
+    const toggle = document.getElementById('summaryToggle');
+    const body = document.getElementById('summaryBody');
+    const icon = document.getElementById('toggleIcon');
+    if (!toggle) return;
 
-    container.innerHTML = ordered.map(p => {
-        const available = p.available && p.quantity > 0;
-        const q = qty.get(p.uuid) || 0;
-        return `
-        <div class="op-row${available ? '' : ' op-unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
-            <div class="op-img">${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}</div>
-            <div class="op-info">
-                <div class="op-name">${escapeHtml(p.name)}</div>
-                <div class="op-price">${BWS.formatPrice(BWS.effectivePrice(p))}</div>
-                <div class="op-status ${available ? 'status-available' : 'status-unavailable'}">${available ? 'متاح' : 'غير متاح'}</div>
-            </div>
-            <div class="op-qty">
-                <button class="qty-btn op-dec" ${available ? '' : 'disabled'} aria-label="تقليل">−</button>
-                <span class="op-val">${q}</span>
-                <button class="qty-btn op-inc" ${available ? '' : 'disabled'} aria-label="زيادة">+</button>
-            </div>
-        </div>`;
-    }).join('');
-
-    container.querySelectorAll('.op-row').forEach(row => {
-        const uuid = row.dataset.uuid;
-        const p = products.find(x => x.uuid === uuid);
-        const valEl = row.querySelector('.op-val');
-        const cap = Number(p.quantity || 0);
-        row.querySelector('.op-dec').addEventListener('click', () => {
-            let q = qty.get(uuid) || 0;
-            q = Math.max(0, q - 1);
-            if (q === 0) qty.delete(uuid); else qty.set(uuid, q);
-            valEl.textContent = q;
-            updateTotal(products, qty);
-        });
-        row.querySelector('.op-inc').addEventListener('click', () => {
-            let q = qty.get(uuid) || 0;
-            if (q >= cap) { showToast('لا توجد كمية أكبر متاحة'); return; }
-            q += 1;
-            qty.set(uuid, q);
-            valEl.textContent = q;
-            updateTotal(products, qty);
-        });
+    toggle.addEventListener('click', () => {
+        _summaryOpen = !_summaryOpen;
+        body.style.display = _summaryOpen ? '' : 'none';
+        icon.classList.toggle('open', _summaryOpen);
     });
 }
 
-function updateTotal(products, qty) {
-    let total = 0;
-    for (const p of products) {
-        const q = qty.get(p.uuid) || 0;
-        if (q > 0) total += BWS.effectivePrice(p) * q;
-    }
-    document.getElementById('orderTotal').textContent = BWS.formatPrice(total);
+function bindQtyControls() {
+    const p = _selectedProduct;
+    if (!p) return;
+    const cap = Number(p.quantity || 0);
+    const valEl = document.getElementById('qtyValue');
+    const decBtn = document.getElementById('qtyDec');
+    const incBtn = document.getElementById('qtyInc');
+
+    decBtn.addEventListener('click', () => {
+        if (_currentQty > 1) {
+            _currentQty--;
+            valEl.textContent = _currentQty;
+            updateSummary();
+        }
+    });
+
+    incBtn.addEventListener('click', () => {
+        if (_currentQty >= cap) {
+            showToast('لا توجد كمية أكبر متاحة');
+            return;
+        }
+        _currentQty++;
+        valEl.textContent = _currentQty;
+        updateSummary();
+    });
 }
 
-async function submitOrder(products, qty) {
-    const name = document.getElementById('ofName').value.trim();
-    const phone = document.getElementById('ofPhone').value.trim();
-    const wilaya = document.getElementById('ofWilaya').value;
-    const baladiya = document.getElementById('ofBaladiya').value.trim();
-    const notes = document.getElementById('ofNotes').value.trim();
-    const deliveryType = (document.querySelector('input[name="delivery"]:checked') || {}).value || 'home';
+function updateSummary() {
+    const p = _selectedProduct;
+    if (!p) return;
+    const price = BWS.effectivePrice(p);
+    const total = price * _currentQty;
 
-    if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
-    if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
+    const badge = document.getElementById('summaryQtyBadge');
+    const itemPrice = document.getElementById('summaryItemPrice');
+    const totalEl = document.getElementById('summaryTotal');
 
-    const items = products
-        .filter(p => (qty.get(p.uuid) || 0) > 0)
-        .map(p => ({
-            uuid: p.uuid, id: p.id ?? null, name: p.name,
-            price: BWS.effectivePrice(p), quantity: qty.get(p.uuid),
-            unitType: p.unitType || 'قطعة'
-        }));
-    if (items.length === 0) { showToast('اختر منتجًا واحدًا على الأقل'); return; }
+    if (badge) badge.textContent = 'x' + _currentQty;
+    if (itemPrice) itemPrice.textContent = BWS.formatPrice(total);
+    if (totalEl) totalEl.textContent = BWS.formatPrice(total);
+}
 
+function bindWilayaChange() {
+    const wilSel = document.getElementById('ofWilaya');
+    if (!wilSel) return;
+
+    wilSel.addEventListener('change', () => {
+        const deliveryEl = document.getElementById('summaryDelivery');
+        if (wilSel.value) {
+            if (deliveryEl) deliveryEl.textContent = 'اختر ولاية التسليم';
+        }
+    });
+}
+
+function bindSubmit() {
     const btn = document.getElementById('orderSubmit');
-    btn.disabled = true;
-    const orig = btn.textContent;
-    btn.textContent = 'جاري الإرسال...';
+    if (!btn) return;
 
-    const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes });
-    if (res.ok) {
-        document.querySelector('.order-page').innerHTML = `
-            <div class="order-success">
-                <div class="order-success-icon">✅</div>
-                <h2>تم إرسال طلبك بنجاح</h2>
-                <p>سيتواصل معك المتجر قريبًا لتأكيد الطلب.</p>
-                <a href="${withStore('index.html')}" class="checkout-btn" style="display:inline-block;text-decoration:none;margin-top:14px">العودة إلى المتجر</a>
-            </div>`;
-    } else {
-        showToast(res.error || 'تعذّر إرسال الطلب');
-        btn.disabled = false;
-        btn.textContent = orig;
-    }
+    btn.addEventListener('click', async () => {
+        const p = _selectedProduct;
+        if (!p) return;
+
+        const name = document.getElementById('ofName').value.trim();
+        const phone = document.getElementById('ofPhone').value.trim();
+        const wilaya = document.getElementById('ofWilaya').value;
+        const baladiya = (document.getElementById('ofBaladiya')?.value || '').trim();
+        const notes = (document.getElementById('ofNotes')?.value || '').trim();
+        const deliveryType = document.getElementById('ofDelivery')?.value || 'home';
+
+        if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
+        if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
+
+        const items = [{
+            uuid: p.uuid,
+            id: p.id ?? null,
+            name: p.name,
+            price: BWS.effectivePrice(p),
+            quantity: _currentQty,
+            unitType: p.unitType || 'قطعة'
+        }];
+
+        btn.disabled = true;
+        const orig = btn.textContent;
+        btn.textContent = 'جاري الإرسال...';
+
+        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes });
+        if (res.ok) {
+            document.getElementById('orderPage').innerHTML = `
+                <div class="order-success">
+                    <div class="order-success-icon">✅</div>
+                    <h2>تم إرسال طلبك بنجاح</h2>
+                    <p>سيتواصل معك المتجر قريبًا لتأكيد الطلب.</p>
+                    <a href="${withStore('index.html')}" class="checkout-btn order-success-btn">العودة إلى المتجر</a>
+                </div>`;
+        } else {
+            showToast(res.error || 'تعذّر إرسال الطلب');
+            btn.disabled = false;
+            btn.textContent = orig;
+        }
+    });
+}
+
+function renderRelatedProducts(excludeUuid) {
+    const container = document.getElementById('relatedProducts');
+    const section = document.getElementById('orderRelatedSection');
+    if (!container || !section) return;
+
+    // Get products excluding the selected one, limit to 4
+    const related = _allProducts
+        .filter(p => p.uuid !== excludeUuid && p.available && p.quantity > 0)
+        .slice(0, 4);
+
+    if (related.length === 0) return;
+
+    section.style.display = '';
+    container.innerHTML = related.map(p => {
+        const price = BWS.effectivePrice(p);
+        const href = withStore('order.html?product=' + encodeURIComponent(p.uuid));
+        return `
+            <a class="related-card" href="${escapeHtml(href)}">
+                <div class="related-card-img">
+                    ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+                </div>
+                <div class="related-card-body">
+                    <div class="related-card-name">${escapeHtml(p.name)}</div>
+                    <div class="related-card-price">${BWS.formatPrice(price)}</div>
+                </div>
+            </a>`;
+    }).join('');
 }

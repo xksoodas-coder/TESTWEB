@@ -776,3 +776,34 @@
         display: none;
     }
 }
+
+/* ===== Product descriptions admin ===== */
+.desc-list { display: flex; flex-direction: column; }
+.desc-row {
+    border-bottom: 1px solid var(--border, #e5e5e5);
+    padding: 12px 6px;
+}
+.desc-row:last-child { border-bottom: none; }
+.desc-row-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.desc-name { font-weight: 700; flex: 1; min-width: 160px; }
+.desc-row-head .desc-toggle { margin-inline-start: auto; }
+.desc-editor {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.desc-label { font-size: 13px; color: var(--text-muted, #666); font-weight: 600; }
+.desc-editor textarea {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+}
+.desc-actions { display: flex; justify-content: flex-start; margin-top: 4px; }
+

@@ -293,6 +293,23 @@ const BWS = (function () {
         async fetchProductDetail(uuid) {
             return await apiFetch('/api/product?uuid=' + encodeURIComponent(uuid), { method: 'GET' });
         },
+
+        // ----- product descriptions (admin only, website-managed) -----
+        // Map of { uuid: { shortDescription, description } } for the whole store,
+        // used to prefill the admin editor.
+        async fetchProductDescriptions() {
+            const data = await apiFetch('/api/product-descriptions', {
+                method: 'GET', adminAuth: true
+            });
+            return data.items || {};
+        },
+        async saveProductDescription(uuid, shortDescription, description) {
+            return await apiFetch('/api/product-descriptions', {
+                method: 'POST',
+                body: { uuid, shortDescription, description },
+                adminAuth: true
+            });
+        },
         // All products across the store, paginated (used by "products" display mode).
         async fetchAllProducts({ page = 1, pageSize = 25 } = {}) {
             const offset = Math.max(0, (page - 1) * pageSize);

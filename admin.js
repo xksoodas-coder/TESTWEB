@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('settingsForm')) {
             wireSettingsPage();
         }
+        if (document.getElementById('descProductsList')) {
+            await wireDescriptionsPage();
+        }
     } catch (err) {
         console.error(err);
         showToastAdmin(err.message || 'خطأ في الاتصال بالخادم');
@@ -186,6 +189,117 @@ function wireCategoriesToolbar() {
         await renderCategoriesTable(search?.value || '');
         showToastAdmin('تم إخفاء جميع التصنيفات');
     });
+}
+
+// ===== Product descriptions admin =====
+async function wireDescriptionsPage() {
+    const listEl = document.getElementById('descProductsList');
+    const searchEl = document.getElementById('descSearch');
+    const loadMoreBtn = document.getElementById('descLoadMore');
+    const PAGE_SIZE = 50;
+
+    let descMap = {};        // uuid -> { shortDescription, description }
+    let loaded = [];         // accumulated products across pages
+    let page = 0;
+    let total = Infinity;
+
+    try {
+        descMap = await BWS.fetchProductDescriptions();
+    } catch (err) {
+        descMap = {};
+    }
+
+    function hasDesc(uuid) {
+        const d = descMap[uuid];
+        return !!(d && ((d.shortDescription || '').trim() || (d.description || '').trim()));
+    }
+
+    function render() {
+        const filter = (searchEl.value || '').trim().toLowerCase();
+        const rows = loaded.filter(p => !filter || (p.name || '').toLowerCase().includes(filter));
+
+        if (rows.length === 0) {
+            listEl.innerHTML = `<p class="muted" style="padding:16px">لا توجد منتجات مطابقة</p>`;
+            return;
+        }
+
+        listEl.innerHTML = rows.map(p => {
+            const d = descMap[p.uuid] || { shortDescription: '', description: '' };
+            const flagged = hasDesc(p.uuid);
+            return `
+                <div class="desc-row" data-uuid="${escapeHtmlAdmin(p.uuid)}">
+                    <div class="desc-row-head">
+                        <span class="desc-name">${escapeHtmlAdmin(p.name)}</span>
+                        <span class="status-pill ${flagged ? 'visible' : 'hidden'}">
+                            ${flagged ? 'له وصف' : 'بدون وصف'}
+                        </span>
+                        <button class="ghost-btn desc-toggle">تعديل الوصف</button>
+                    </div>
+                    <div class="desc-editor" hidden>
+                        <label class="desc-label">وصف مختصر (نقاط — سطر لكل نقطة، يظهر بجانب اسم المنتج)</label>
+                        <textarea class="admin-input desc-short" rows="3">${escapeHtmlAdmin(d.shortDescription || '')}</textarea>
+                        <label class="desc-label">وصف كامل (فقرات تظهر أسفل المنتج)</label>
+                        <textarea class="admin-input desc-full" rows="6">${escapeHtmlAdmin(d.description || '')}</textarea>
+                        <div class="desc-actions">
+                            <button class="primary-btn desc-save">حفظ الوصف</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        listEl.querySelectorAll('.desc-row').forEach(row => {
+            const uuid = row.dataset.uuid;
+            const editor = row.querySelector('.desc-editor');
+            row.querySelector('.desc-toggle').addEventListener('click', () => {
+                editor.hidden = !editor.hidden;
+            });
+            row.querySelector('.desc-save').addEventListener('click', async () => {
+                const shortDescription = row.querySelector('.desc-short').value;
+                const description = row.querySelector('.desc-full').value;
+                const btn = row.querySelector('.desc-save');
+                const orig = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'جاري الحفظ...';
+                try {
+                    await BWS.saveProductDescription(uuid, shortDescription, description);
+                    descMap[uuid] = { shortDescription, description };
+                    const pill = row.querySelector('.status-pill');
+                    const flagged = hasDesc(uuid);
+                    pill.className = `status-pill ${flagged ? 'visible' : 'hidden'}`;
+                    pill.textContent = flagged ? 'له وصف' : 'بدون وصف';
+                    showToastAdmin('تم حفظ الوصف');
+                } catch (err) {
+                    showToastAdmin(err.message || 'تعذّر حفظ الوصف');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = orig;
+                }
+            });
+        });
+    }
+
+    async function loadNextPage() {
+        page += 1;
+        loadMoreBtn.disabled = true;
+        try {
+            const { products, total: t } = await BWS.fetchAllProducts({ page, pageSize: PAGE_SIZE });
+            total = t;
+            loaded = loaded.concat(products);
+            render();
+        } catch (err) {
+            if (page === 1) {
+                listEl.innerHTML = `<p style="padding:16px;color:var(--danger,#c53030)">تعذّر تحميل المنتجات: ${escapeHtmlAdmin(err.message || '')}</p>`;
+            }
+        } finally {
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.hidden = loaded.length >= total;
+        }
+    }
+
+    searchEl.addEventListener('input', render);
+    await loadNextPage();
+    loadMoreBtn.addEventListener('click', loadNextPage);
 }
 
 // ===== Settings page =====

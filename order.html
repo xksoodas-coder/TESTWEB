@@ -14,7 +14,9 @@
         <div class="header-container">
             <div class="header-left"></div>
             <nav class="main-nav">
-                <a href="index.html" class="back-to-store">→ المتجر</a>
+                <a href="index.html" class="back-to-store">الرئيسية</a>
+                <a href="categories.html">التصنيفات</a>
+                <a href="contact.html">اتصل بنا</a>
             </nav>
             <div class="header-right">
                 <a href="index.html" class="logo"><div class="logo-circle"><span>BS</span></div></a>
@@ -22,67 +24,18 @@
         </div>
     </header>
 
-    <main class="order-page">
-        <!-- Selected product hero -->
-        <section class="order-hero" id="orderHero">
+    <main class="order-page" id="orderPage">
+        <!-- Top section: Product info + image + form -->
+        <section class="order-top-section" id="orderTopSection">
             <div class="empty-state"><p>جاري التحميل...</p></div>
         </section>
 
-        <!-- Customer form -->
-        <section class="order-form-section">
-            <h2 class="order-section-title">معلومات الطلب</h2>
-            <form id="orderForm" class="order-form" autocomplete="on">
-                <div class="of-row">
-                    <div class="of-field">
-                        <label for="ofName">الاسم الكامل *</label>
-                        <input type="text" id="ofName" required>
-                    </div>
-                    <div class="of-field">
-                        <label for="ofPhone">رقم الهاتف *</label>
-                        <input type="tel" id="ofPhone" inputmode="tel" required>
-                    </div>
-                </div>
-                <div class="of-row">
-                    <div class="of-field">
-                        <label for="ofWilaya">الولاية *</label>
-                        <select id="ofWilaya" required></select>
-                    </div>
-                    <div class="of-field">
-                        <label for="ofBaladiya">البلدية</label>
-                        <input type="text" id="ofBaladiya">
-                    </div>
-                </div>
-                <div class="of-field">
-                    <label>نوع التوصيل</label>
-                    <div class="delivery-options">
-                        <label class="delivery-opt">
-                            <input type="radio" name="delivery" value="home" checked>
-                            <span>🏠 توصيل إلى المنزل</span>
-                        </label>
-                        <label class="delivery-opt">
-                            <input type="radio" name="delivery" value="office">
-                            <span>🏢 توصيل إلى المكتب</span>
-                        </label>
-                    </div>
-                </div>
-                <div class="of-field">
-                    <label for="ofNotes">ملاحظة (اختياري)</label>
-                    <textarea id="ofNotes" rows="2"></textarea>
-                </div>
-            </form>
+        <!-- Related products -->
+        <section class="order-related-section" id="orderRelatedSection" style="display:none">
+            <h2 class="related-title">منتجات ذات صلة</h2>
+            <p class="related-subtitle">نقدم لكم الافضل دائماً</p>
+            <div class="related-products-grid" id="relatedProducts"></div>
         </section>
-
-        <!-- Products list -->
-        <section class="order-products-section">
-            <h2 class="order-section-title">المنتجات — اختر الكميات</h2>
-            <div id="orderProducts" class="order-products"></div>
-        </section>
-
-        <!-- Sticky footer total + submit -->
-        <div class="order-bar">
-            <div class="order-total">المجموع: <strong id="orderTotal">0 د.ج</strong></div>
-            <button class="checkout-btn" id="orderSubmit">تأكيد الطلب</button>
-        </div>
     </main>
 
     <div class="toast" id="toast"></div>

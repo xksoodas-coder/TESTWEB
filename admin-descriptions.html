@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigWebStore - أوصاف المنتجات</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-body">
+    <header class="admin-header">
+        <div class="admin-header-container">
+            <div class="admin-brand">
+                <div class="logo-circle small"><span>BS</span></div>
+                <span>لوحة الإدارة</span>
+            </div>
+            <nav class="admin-nav">
+                <a href="admin-dashboard.html">لوحة التحكم</a>
+                <a href="admin-categories.html">إدارة التصنيفات</a>
+                <a href="admin-descriptions.html" class="active">أوصاف المنتجات</a>
+                <a href="admin-settings.html">الإعدادات</a>
+                <a href="index.html">عرض المتجر</a>
+            </nav>
+            <button class="logout-btn" id="logoutBtn">خروج</button>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <h1 class="admin-title">أوصاف المنتجات</h1>
+        <p class="admin-subtitle muted">
+            أضف لكل منتج وصفًا مختصرًا (نقاط سريعة تظهر بجانب اسم المنتج) ووصفًا كاملًا
+            (فقرات تظهر أسفل صفحة المنتج). تُدار الأوصاف من هنا فقط — تطبيق الهاتف
+            والحاسوب لا يحمّلانها ولا يعدّلانها.
+        </p>
+
+        <div class="admin-toolbar">
+            <input type="text" id="descSearch" class="admin-input" placeholder="ابحث عن منتج بالاسم...">
+        </div>
+
+        <div class="admin-card">
+            <div id="descProductsList" class="desc-list">
+                <!-- Filled by admin.js -->
+                <p class="muted" style="padding:16px">جاري التحميل...</p>
+            </div>
+            <div style="text-align:center;padding:14px">
+                <button class="ghost-btn" id="descLoadMore" hidden>تحميل المزيد</button>
+            </div>
+        </div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
