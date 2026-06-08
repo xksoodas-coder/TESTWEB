@@ -25,9 +25,19 @@ function showToast(message) {
     showToast._t = setTimeout(() => toast.classList.remove('show'), 2400);
 }
 
+function makePlaceholder(text) {
+    const div = document.createElement('div');
+    div.className = 'category-placeholder';
+    div.textContent = text;
+    return div;
+}
+window.makePlaceholder = makePlaceholder;
+
 function imageOrPlaceholder(src, fallback) {
     if (src) {
-        return `<img src="${escapeHtml(src)}" alt="" onerror="this.style.display='none'">`;
+        // On load failure, fall back to the colored first-letter placeholder
+        // (site color) instead of leaving an empty box.
+        return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallback)}'))">`;
     }
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
 }
@@ -148,12 +158,12 @@ function renderOrderPage() {
                     <div class="of-field">
                         <select id="ofWilaya" required>
                             <option value="">الولاية</option>
-                            ${wilayas.map(w => `<option>${escapeHtml(w)}</option>`).join('')}
+                            ${wilayas.map(w => `<option value="${escapeHtml(w.code + ' - ' + w.name)}" data-wid="${w.id}">${escapeHtml(w.code + ' - ' + w.name)}</option>`).join('')}
                         </select>
                     </div>
                     <div class="of-field">
-                        <select id="ofBaladiya">
-                            <option value="">بلدية</option>
+                        <select id="ofBaladiya" disabled>
+                            <option value="">البلدية / الدائرة</option>
                         </select>
                     </div>
                 </div>
@@ -337,13 +347,31 @@ function updateSummary() {
 function bindWilayaChange() {
     const wilSel = document.getElementById('ofWilaya');
     if (!wilSel) return;
+    const balSel = document.getElementById('ofBaladiya');
 
     wilSel.addEventListener('change', () => {
         const deliveryEl = document.getElementById('summaryDelivery');
         if (wilSel.value) {
             if (deliveryEl) deliveryEl.textContent = 'اختر ولاية التسليم';
         }
+        populateBaladiyas(wilSel, balSel);
     });
+}
+
+// Fill the baladiya dropdown with the communes of the selected wilaya,
+// each shown as "post_code - name" (linked via the wilaya id).
+function populateBaladiyas(wilSel, balSel) {
+    if (!balSel) return;
+    const opt = wilSel.options[wilSel.selectedIndex];
+    const wid = opt ? opt.getAttribute('data-wid') : '';
+    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
+
+    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
+        communes.map(c => {
+            const label = (c.code ? c.code + ' - ' : '') + c.name;
+            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
+        }).join('');
+    balSel.disabled = communes.length === 0;
 }
 
 function bindSubmit() {

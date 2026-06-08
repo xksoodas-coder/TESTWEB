@@ -22,8 +22,18 @@ function showToast(message) {
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => toast.classList.remove('show'), 2400);
 }
+function makePlaceholder(text) {
+    const div = document.createElement('div');
+    div.className = 'category-placeholder';
+    div.textContent = text;
+    return div;
+}
+window.makePlaceholder = makePlaceholder;
+
 function imageOrPlaceholder(src, fallback) {
-    if (src) return `<img src="${escapeHtml(src)}" alt="" onerror="this.style.display='none'">`;
+    // On load failure, fall back to the colored first-letter placeholder
+    // (site color) instead of leaving an empty box.
+    if (src) return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallback)}'))">`;
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
 }
 function bulletsHtml(text) {
