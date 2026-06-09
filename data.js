@@ -278,9 +278,10 @@ const BWS = (function () {
         // ----- account balance (server) -----
         async fetchAccount() {
             try {
-                return await apiFetch('/api/account', { method: 'GET' });
+                // إضافة بصمة زمنية + cache:no-store لمنع تخزين المتصفح (قراءة محدّثة دائماً).
+                return await apiFetch('/api/account?t=' + Date.now(), { method: 'GET', cache: 'no-store' });
             } catch {
-                return { remaining: 0, paid: 0, available: false };
+                return { remaining: 0, available: false };
             }
         },
 
@@ -557,8 +558,8 @@ const BWS = (function () {
         allowedTiers() {
             const c = getCustomerSession();
             const t = (c && Array.isArray(c.priceTiers)) ? c.priceTiers : [1];
-            const clean = t.map(Number).filter(n => n === 1 || n === 2 || n === 3);
-            return clean.length ? Array.from(new Set(clean)).sort() : [1];
+            const clean = t.map(Number).filter(n => n >= 1 && n <= 7);
+            return clean.length ? Array.from(new Set(clean)).sort((a, b) => a - b) : [1];
         },
         firstAllowedTier() { return this.allowedTiers()[0]; },
         isPricePerProduct() {
@@ -576,10 +577,15 @@ const BWS = (function () {
             }
         },
         productTierPrices(product) {
-            const p1 = Number(product.price1 ?? product.price ?? 0);
-            const p2 = Number(product.price2 ?? 0);
-            const p3 = Number(product.price3 ?? 0);
-            return { 1: p1, 2: p2, 3: p3 };
+            return {
+                1: Number(product.price1 ?? product.price ?? 0),
+                2: Number(product.price2 ?? 0),
+                3: Number(product.price3 ?? 0),
+                4: Number(product.price4 ?? 0),
+                5: Number(product.price5 ?? 0),
+                6: Number(product.price6 ?? 0),
+                7: Number(product.price7 ?? 0)
+            };
         },
         priceForTier(prices, tier) {
             const v = Number(prices?.[tier] ?? 0);
@@ -587,7 +593,7 @@ const BWS = (function () {
             // Fallback: tier price not set → use price1, else first positive.
             const p1 = Number(prices?.[1] ?? 0);
             if (p1 > 0) return p1;
-            for (const k of [2, 3]) { if (Number(prices?.[k]) > 0) return Number(prices[k]); }
+            for (const k of [2, 3, 4, 5, 6, 7]) { if (Number(prices?.[k]) > 0) return Number(prices[k]); }
             return 0;
         },
         // Tiers usable for a given product: allowed AND have a positive price.

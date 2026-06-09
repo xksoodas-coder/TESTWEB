@@ -79,7 +79,7 @@ export default async function handler(req, res) {
             invMap.set(uuid, entry);
         }
 
-        let sumDue = 0, sumPaidOnInvoices = 0;
+        let sumDue = 0;
         for (const entry of invMap.values()) {
             if (entry.deleted) continue;
             if (entry.status === 2) continue; // cancelled
@@ -87,7 +87,6 @@ export default async function handler(req, res) {
             if (!data) continue;
             if (Number(data.CustomerNumber) !== cid) continue;
             sumDue += Number(data.DueAmount || 0);
-            sumPaidOnInvoices += Number(data.PaidAmount || 0);
         }
 
         // ── Payments (reduce to latest per record, drop deletes) ──
@@ -106,13 +105,14 @@ export default async function handler(req, res) {
             sumAddedDebts += Number(data.Amount || 0);
         }
 
+        // المتبقي = ديون الفواتير غير المدفوعة + الديون المضافة − التسديدات (الكاملة).
         const remaining = sumDue + sumAddedDebts - sumPayments;
-        const paid = sumPaidOnInvoices + sumPayments;
 
-        res.setHeader('Cache-Control', 'private, max-age=20');
+        // لا تخزين في المتصفح — أي إضافة دين أو تعديل فاتورة يُقرأ فوراً محدّثاً.
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
         res.status(200).json({
             remaining: Math.round(remaining * 100) / 100,
-            paid: Math.round(paid * 100) / 100,
             available: true
         });
     } catch (err) {

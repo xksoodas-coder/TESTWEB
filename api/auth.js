@@ -139,6 +139,13 @@ export default async function handler(req, res) {
             return;
         }
 
+        // مفتاح تفعيل الدخول للموقع (سويتش في تطبيق الهاتف). غياب الحقل = مفعّل
+        // (توافق مع السجلات القديمة والحاسوب الذي لا يرسل هذا الحقل).
+        if (match.data.WebEnabled !== undefined && !isTruthy(match.data.WebEnabled)) {
+            res.status(403).json({ error: 'تم تعطيل دخول هذا الحساب للموقع. يرجى التواصل مع المتجر.' });
+            return;
+        }
+
         // Price permissions: which tiers this customer may use, and whether
         // each product's price can be switched (per-product) vs one global tier.
         const priceTiers = [];
@@ -146,6 +153,10 @@ export default async function handler(req, res) {
         if (match.data.CanUsePrice1 === undefined || isTruthy(match.data.CanUsePrice1)) priceTiers.push(1);
         if (isTruthy(match.data.CanUsePrice2)) priceTiers.push(2);
         if (isTruthy(match.data.CanUsePrice3)) priceTiers.push(3);
+        if (isTruthy(match.data.CanUsePrice4)) priceTiers.push(4);
+        if (isTruthy(match.data.CanUsePrice5)) priceTiers.push(5);
+        if (isTruthy(match.data.CanUsePrice6)) priceTiers.push(6);
+        if (isTruthy(match.data.CanUsePrice7)) priceTiers.push(7);
         if (priceTiers.length === 0) priceTiers.push(1);
         const pricePerProduct = isTruthy(match.data.PricePerProduct);
 

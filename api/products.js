@@ -118,6 +118,18 @@ export default async function handler(req, res) {
             args: [storeId]
         });
 
+        // Extra prices (4..7) live in a standalone table keyed by product uuid.
+        let extraPrices = {};
+        try {
+            const ep = await client.execute({
+                sql: `SELECT json_payload FROM turso_product_extra_prices WHERE store_id = ? LIMIT 1`,
+                args: [storeId]
+            });
+            if (ep.rows.length && ep.rows[0].json_payload) {
+                extraPrices = JSON.parse(ep.rows[0].json_payload) || {};
+            }
+        } catch { /* table may not exist yet */ }
+
         const latest = reduceProducts(result.rows);
         const products = [];
         for (const [recordUuid, entry] of latest) {
@@ -135,6 +147,11 @@ export default async function handler(req, res) {
             const price1 = Number(data.sellPrice ?? 0);
             const price2 = Number(data.wholesalePrice ?? 0);
             const price3 = Number(data.price3 ?? 0);
+            const ex = extraPrices[recordUuid] || [];
+            const price4 = Number(ex[0] ?? 0);
+            const price5 = Number(ex[1] ?? 0);
+            const price6 = Number(ex[2] ?? 0);
+            const price7 = Number(ex[3] ?? 0);
             products.push({
                 uuid: recordUuid,
                 id: data.id ?? null,
@@ -144,6 +161,10 @@ export default async function handler(req, res) {
                 price1,
                 price2,
                 price3,
+                price4,
+                price5,
+                price6,
+                price7,
                 quantity: totalQty,
                 available: totalQty > 0,
                 unitType: data.unitType ?? 'قطعة',

@@ -162,10 +162,6 @@ function renderCustomerBadge() {
                 <span>الدين المتبقي</span>
                 <strong class="debt-remaining" id="ddRemaining">—</strong>
             </div>
-            <div class="account-row">
-                <span>المبلغ المدفوع</span>
-                <strong class="debt-paid" id="ddPaid">—</strong>
-            </div>
         </div>
     `;
     headerLeft.appendChild(wrap);
@@ -190,9 +186,7 @@ function renderCustomerBadge() {
         if (!acc || acc.available === false) return;
         const inline = document.getElementById('accountDebtInline');
         const ddR = document.getElementById('ddRemaining');
-        const ddP = document.getElementById('ddPaid');
         ddR.textContent = BWS.formatPrice(acc.remaining || 0);
-        ddP.textContent = BWS.formatPrice(acc.paid || 0);
         if ((acc.remaining || 0) > 0) {
             inline.textContent = BWS.formatPrice(acc.remaining);
             inline.hidden = false;

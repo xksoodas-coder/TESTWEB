@@ -75,6 +75,19 @@ export default async function handler(req, res) {
             }
         } catch { /* table may not exist yet → no descriptions */ }
 
+        // Extra prices (4..7) from the standalone table.
+        let ex = [];
+        try {
+            const ep = await client.execute({
+                sql: `SELECT json_payload FROM turso_product_extra_prices WHERE store_id = ? LIMIT 1`,
+                args: [access.storeId]
+            });
+            if (ep.rows.length && ep.rows[0].json_payload) {
+                const m = JSON.parse(ep.rows[0].json_payload) || {};
+                ex = m[uuid] || [];
+            }
+        } catch { /* table may not exist yet */ }
+
         res.setHeader('Cache-Control', 'private, max-age=30');
         res.status(200).json({
             uuid,
@@ -85,6 +98,10 @@ export default async function handler(req, res) {
             price1: Number(full.sellPrice ?? 0),
             price2: Number(full.wholesalePrice ?? 0),
             price3: Number(full.price3 ?? 0),
+            price4: Number(ex[0] ?? 0),
+            price5: Number(ex[1] ?? 0),
+            price6: Number(ex[2] ?? 0),
+            price7: Number(ex[3] ?? 0),
             quantity: qty,
             available: qty > 0,
             unitType: full.unitType ?? 'قطعة',
