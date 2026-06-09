@@ -486,12 +486,36 @@ img {
     display: none !important;
 }
 
-/* Direct-order mode: the action is a link styled like the add button. */
-a.add-cart-btn.order-btn {
+/* The big, wide "اضغط هنا للطلب" button (link styled like the add button). */
+.add-cart-btn.order-btn {
     display: block;
     text-align: center;
     text-decoration: none;
+    flex: 1 1 auto;
 }
+
+/* "غير متاح" placeholder shown in place of the order button. */
+.add-cart-btn.unavailable-btn {
+    opacity: .5;
+    pointer-events: none;
+}
+
+/* Small cart-icon button beside the big order button. */
+.cart-icon-btn {
+    flex: 0 0 auto;
+    width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.12s ease;
+}
+.cart-icon-btn:hover { background-color: var(--primary-dark); transform: scale(1.04); }
+.cart-icon-btn svg { width: 18px; height: 18px; }
 
 /* Clickable product image + name → product detail page. */
 a.product-link {
@@ -1031,6 +1055,45 @@ a.product-link {
 .customer-logout:hover {
     background-color: rgba(255, 255, 255, 0.32);
 }
+
+/* "تسجيل الدخول" button shown on a public store for registered customers. */
+.customer-login-btn {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 18px;
+    background-color: rgba(255, 255, 255, 0.18);
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+    white-space: nowrap;
+}
+.customer-login-btn:hover { background-color: rgba(255, 255, 255, 0.34); }
+
+/* Guest checkout form inside the cart summary (public store, no login). */
+.guest-checkout-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 6px 0 14px;
+}
+.guest-checkout-form h4 {
+    font-size: 14px;
+    color: var(--text-dark);
+    margin: 4px 0 2px;
+}
+.guest-checkout-form input,
+.guest-checkout-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13.5px;
+    font-family: inherit;
+    background: var(--bg-white);
+    color: var(--text-dark);
+}
+.guest-checkout-form select:disabled { opacity: .6; }
 
 /* ===== Account button + debt dropdown ===== */
 .customer-info {

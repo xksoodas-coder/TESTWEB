@@ -21,11 +21,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     wireSearchPanel();
     initCartSidebar();
     wireCartIcons();
-    if (!direct) renderCustomerBadge();
-    if (direct) {
-        // No cart in public mode — hide the cart icon.
-        document.querySelectorAll('.cart-btn').forEach(el => { el.style.display = 'none'; });
-    }
+    // The cart works in both modes now (guests check out via a quick form).
+    // Show the customer badge whenever a session exists; otherwise, on a public
+    // store, offer a secure "تسجيل الدخول" button for registered customers.
+    renderCustomerBadge();
+    if (direct && !BWS.getCustomerSession()) renderLoginButton();
     applyStoreBranding();
     initFooterReveal();
 
@@ -194,6 +194,20 @@ function renderCustomerBadge() {
     });
 }
 
+// ===== Public store: "تسجيل الدخول" button for registered customers =====
+// On a public store a guest browses freely; this button lets a registered
+// customer sign in (api/auth.js validates credentials — secure, members only).
+function renderLoginButton() {
+    const headerLeft = document.querySelector('.header-left');
+    if (!headerLeft || document.querySelector('.customer-login-btn') ||
+        document.querySelector('.customer-info')) return;
+    const a = document.createElement('a');
+    a.className = 'customer-login-btn';
+    a.href = withTenant('login.html');
+    a.textContent = 'تسجيل الدخول';
+    headerLeft.appendChild(a);
+}
+
 // ===== Inject shared chrome (favorites link + footer store-info block) =====
 function injectChrome() {
     // 0. Ensure a toast element exists (the home page doesn't ship one).
@@ -204,9 +218,9 @@ function injectChrome() {
         document.body.appendChild(t);
     }
 
-    // 1. "المفضلة" link in the main nav (cart mode only — needs login).
+    // 1. "المفضلة" link in the main nav (logged-in customers only — needs an account).
     const nav = document.querySelector('.main-nav');
-    if (nav && !window.__BWS_DIRECT__ && !nav.querySelector('.nav-favorites')) {
+    if (nav && BWS.getCustomerSession() && !nav.querySelector('.nav-favorites')) {
         const a = document.createElement('a');
         a.href = 'products.html?favorites=1';
         a.className = 'nav-favorites';
@@ -559,6 +573,9 @@ function renderImageOrPlaceholder(src, fallbackText) {
 // Used everywhere a product lacks a real image.
 const PRODUCT_BOX_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8.5"/></svg>';
 
+// Cart glyph for the per-product "add to cart" icon button.
+const CART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
+
 function renderProductImageOrPlaceholder(src) {
     if (src) {
         return `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" onerror="this.replaceWith(makeProductPlaceholder())">`;
@@ -653,21 +670,27 @@ async function renderProductsPage() {
 function renderProductCard(p) {
     const available = p.available && p.quantity > 0;
     const fav = p.isFavorite ? ' active' : '';
-    const direct = window.__BWS_DIRECT__ === true;
+    const loggedIn = !!BWS.getCustomerSession();
 
-    // In direct (public) mode the action is a link to the order landing page;
-    // no cart, no favourites.
-    const actions = direct
-        ? (available
-            ? `<a class="add-cart-btn order-btn" href="${withTenant('order.html?product=' + encodeURIComponent(p.uuid))}">اضغط هنا للطلب</a>`
-            : `<span class="add-cart-btn" style="opacity:.5;text-align:center;pointer-events:none">غير متاح</span>`)
-        : `<button class="add-cart-btn" ${available ? '' : 'hidden'}>إضافة إلى السلة</button>
-           <button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>`;
+    // Every product now shows BOTH actions, in every mode:
+    //   • a big, wide "اضغط هنا للطلب" button → the order form,
+    //   • a small cart-icon button → add to cart.
+    // Clicking the product (image/name) opens the same order form.
+    const orderUrl = withTenant('order.html?product=' + encodeURIComponent(p.uuid));
+    const orderBtn = available
+        ? `<a class="add-cart-btn order-btn" href="${orderUrl}">اضغط هنا للطلب</a>`
+        : `<span class="add-cart-btn order-btn unavailable-btn">غير متاح</span>`;
+    const cartIconBtn = available
+        ? `<button class="cart-icon-btn" type="button" aria-label="إضافة إلى السلة" title="إضافة إلى السلة">${CART_SVG}</button>`
+        : '';
+    // Favourites belong to a logged-in customer only.
+    const favBtn = loggedIn
+        ? `<button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>`
+        : '';
 
-    const detailUrl = withTenant('product.html?uuid=' + encodeURIComponent(p.uuid));
     return `
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
-            <a class="product-link" href="${detailUrl}">
+            <a class="product-link" href="${orderUrl}">
                 <div class="product-image">
                     ${renderProductImageOrPlaceholder(p.imageUrl)}
                 </div>
@@ -678,7 +701,7 @@ function renderProductCard(p) {
                 ${available ? 'متاح' : 'غير متاح'}
             </div>
             <div class="product-actions">
-                ${actions}
+                ${orderBtn}${cartIconBtn}${favBtn}
             </div>
         </div>
     `;
@@ -731,14 +754,12 @@ function priceArrowHtml(it) {
 }
 
 function wireProductCards(grid, products, favoritesMode) {
-    // Direct (public) mode: cards are order links — no cart/favourite wiring.
-    if (window.__BWS_DIRECT__ === true) return;
     const productByUuid = new Map(products.map(p => [p.uuid, p]));
     grid.querySelectorAll('.product-card').forEach(card => {
         const uuid = card.dataset.uuid;
 
-        // Add to cart
-        const addBtn = card.querySelector('.add-cart-btn');
+        // Add to cart (the small cart-icon button; the big button is an order link).
+        const addBtn = card.querySelector('.cart-icon-btn');
         if (addBtn) {
             addBtn.addEventListener('click', () => {
                 const product = productByUuid.get(uuid);
@@ -866,12 +887,50 @@ function renderCartPage() {
     document.getElementById('summaryCount').textContent = BWS.cartCount();
     document.getElementById('summaryTotal').textContent = BWS.formatPrice(BWS.cartTotal());
 
+    const session = BWS.getCustomerSession();
+    const loggedIn = session && BWS.getSessionToken();
+    const isPublic = BWS.getSettings().orderMode === 'direct';
+    // On a public store, a guest checks out via a quick delivery form
+    // (name/phone/wilaya/baladiya/delivery), exactly like the order page.
+    const guestCheckout = isPublic && !loggedIn;
+    if (guestCheckout) ensureGuestCheckoutForm(summary);
+    else removeGuestCheckoutForm();
+
     const checkoutBtn = document.getElementById('checkoutBtn');
     checkoutBtn.onclick = async () => {
-        const session = BWS.getCustomerSession();
-        if (!session || !BWS.getSessionToken()) {
+        if (guestCheckout) {
+            const v = id => (document.getElementById(id)?.value || '').trim();
+            const name = v('ckName'), phone = v('ckPhone'), wilaya = v('ckWilaya');
+            const baladiya = v('ckBaladiya'), notes = v('ckNotes');
+            const deliveryType = document.getElementById('ckDelivery')?.value || 'home';
+            if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
+            if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
+            checkoutBtn.disabled = true;
+            checkoutBtn.textContent = 'جاري الإرسال...';
+            const items = BWS.getCart().map(it => ({
+                uuid: it.uuid, id: it.id ?? null, name: it.name,
+                price: Number(it.price || 0), quantity: Number(it.qty || 0),
+                unitType: it.unitType || 'قطعة'
+            }));
+            const result = await BWS.submitGuestOrder({
+                items, name, phone, wilaya, baladiya, deliveryType, notes
+            });
+            if (result.ok) {
+                BWS.clearCart();
+                renderCartPage();
+                updateCartBadge();
+                showToast('تم إرسال طلبك. سيتواصل معك المتجر قريبًا.');
+            } else {
+                showToast(result.error || 'تعذّر إرسال الطلب');
+            }
+            checkoutBtn.disabled = false;
+            checkoutBtn.textContent = 'إتمام الطلب';
+            return;
+        }
+
+        if (!loggedIn) {
             showToast('الرجاء تسجيل الدخول لإتمام الطلب');
-            setTimeout(() => { window.location.href = 'login.html'; }, 1200);
+            setTimeout(() => { window.location.href = withTenant('login.html'); }, 1200);
             return;
         }
         checkoutBtn.disabled = true;
@@ -897,6 +956,58 @@ function renderCartPage() {
             updateCartBadge();
         }
     };
+}
+
+// ===== Guest checkout form (public store, no login) =====
+// Injected once into the cart summary; collects the same delivery details as
+// the order page so a guest can complete a multi-item cart order.
+function ensureGuestCheckoutForm(summary) {
+    if (!summary || document.getElementById('guestCheckoutForm')) return;
+    const wilayas = (window.BWS_WILAYAS || []);
+    const form = document.createElement('div');
+    form.id = 'guestCheckoutForm';
+    form.className = 'guest-checkout-form';
+    form.innerHTML = `
+        <h4>معلومات التوصيل</h4>
+        <input type="text" id="ckName" placeholder="الإسم الكامل" autocomplete="name">
+        <input type="tel" id="ckPhone" inputmode="tel" placeholder="رقم الهاتف" autocomplete="tel">
+        <select id="ckWilaya">
+            <option value="">الولاية</option>
+            ${wilayas.map(w => `<option value="${escapeHtml(w.code + ' - ' + w.name)}" data-wid="${w.id}">${escapeHtml(w.code + ' - ' + w.name)}</option>`).join('')}
+        </select>
+        <select id="ckBaladiya" disabled>
+            <option value="">البلدية / الدائرة</option>
+        </select>
+        <select id="ckDelivery">
+            <option value="home">🏠 توصيل إلى المنزل</option>
+            <option value="office">🏢 توصيل إلى المكتب</option>
+        </select>
+        <input type="text" id="ckNotes" placeholder="ملاحظة (اختيارية)">
+    `;
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    summary.insertBefore(form, checkoutBtn);
+
+    const wilSel = document.getElementById('ckWilaya');
+    const balSel = document.getElementById('ckBaladiya');
+    wilSel.addEventListener('change', () => populateCartBaladiyas(wilSel, balSel));
+}
+
+function removeGuestCheckoutForm() {
+    document.getElementById('guestCheckoutForm')?.remove();
+}
+
+// Fill the baladiya dropdown with the communes of the selected wilaya.
+function populateCartBaladiyas(wilSel, balSel) {
+    if (!balSel) return;
+    const opt = wilSel.options[wilSel.selectedIndex];
+    const wid = opt ? opt.getAttribute('data-wid') : '';
+    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
+    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
+        communes.map(c => {
+            const label = (c.code ? c.code + ' - ' : '') + c.name;
+            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
+        }).join('');
+    balSel.disabled = communes.length === 0;
 }
 
 // ===== Contact Form =====

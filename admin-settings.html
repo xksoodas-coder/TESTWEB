@@ -156,26 +156,26 @@
                 </div>
             </div>
 
-            <!-- Order mode -->
+            <!-- Site access -->
             <div class="admin-card">
-                <h2>طريقة الطلب</h2>
+                <h2>دخول الموقع</h2>
                 <p class="muted" style="margin-bottom:14px;font-size:13px">
-                    اختر كيف يطلب الزبون. «السلة» تتطلّب حسابًا مسجّلًا. «الطلب المباشر»
-                    تجعل المتجر عامًا (بلا تسجيل دخول) ويطلب الزبون عبر استمارة (زبون عابر).
+                    اختر من يمكنه الدخول للموقع. في الحالتين يعرض كل منتج زرّين معًا:
+                    زر «اضغط هنا للطلب» الكبير + أيقونة السلة.
                 </p>
                 <div class="cart-mode-options">
                     <label class="cart-mode-card">
-                        <input type="radio" name="orderMode" value="cart" id="orderModeCart">
+                        <input type="radio" name="orderMode" value="direct" id="orderModeDirect">
                         <div class="mode-info">
-                            <strong>السلة (زبون مسجّل)</strong>
-                            <p>زر «إضافة إلى السلة» ثم إتمام الطلب — يتطلّب تسجيل دخول الزبون.</p>
+                            <strong>عام لكل الزبائن</strong>
+                            <p>متجر عام بلا تسجيل دخول — يتصفّح أي زائر ويطلب مباشرة. يظهر زر «تسجيل الدخول» في الأعلى للزبائن المسجّلين.</p>
                         </div>
                     </label>
                     <label class="cart-mode-card">
-                        <input type="radio" name="orderMode" value="direct" id="orderModeDirect">
+                        <input type="radio" name="orderMode" value="cart" id="orderModeCart">
                         <div class="mode-info">
-                            <strong>الطلب المباشر (زبون عابر)</strong>
-                            <p>متجر عام بلا تسجيل. زر «اضغط هنا للطلب» يفتح استمارة (اسم، هاتف، ولاية، بلدية، توصيل).</p>
+                            <strong>إجباري تسجيل الدخول</strong>
+                            <p>لا يدخل الموقع إلا الزبائن المسجّلون بحساب — يجب تسجيل الدخول أولًا.</p>
                         </div>
                     </label>
                 </div>

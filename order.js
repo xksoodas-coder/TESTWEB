@@ -45,6 +45,25 @@ function imageOrPlaceholder(src, fallback, opts = {}) {
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
 }
 
+// Default product image: a neutral gray box icon (no site color, no letter).
+const PRODUCT_BOX_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8.5"/></svg>';
+function makeProductPlaceholder() {
+    const div = document.createElement('div');
+    div.className = 'product-placeholder';
+    div.innerHTML = PRODUCT_BOX_SVG;
+    return div;
+}
+window.makeProductPlaceholder = makeProductPlaceholder;
+function productImageOrPlaceholder(src, opts = {}) {
+    if (src) {
+        const attrs = opts.lazy
+            ? 'loading="lazy" decoding="async"'
+            : 'fetchpriority="high" decoding="async"';
+        return `<img src="${escapeHtml(src)}" alt="" ${attrs} onerror="this.replaceWith(makeProductPlaceholder())">`;
+    }
+    return `<div class="product-placeholder">${PRODUCT_BOX_SVG}</div>`;
+}
+
 // Build the short-description badge markup (one badge per non-empty line).
 function badgesHtml(text) {
     if (!text) return '';
@@ -88,8 +107,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     try { await BWS.fetchSiteSettings(); } catch {}
     applyTheme();
-    if (BWS.getSettings().orderMode !== 'direct') {
-        window.location.replace(withStore('index.html'));
+    // The order form is available in both modes. On a login-required store the
+    // customer must be signed in first (the order then carries their session).
+    const directMode = BWS.getSettings().orderMode === 'direct';
+    if (!directMode && !(BWS.getCustomerSession() && BWS.getSessionToken())) {
+        window.location.replace(withStore('login.html'));
         return;
     }
     window.__BWS_DIRECT__ = true;
@@ -348,7 +370,7 @@ function renderOrderPage() {
         <!-- Right column: product image -->
         <div class="order-right-col">
             <div class="order-product-image">
-                ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+                ${productImageOrPlaceholder(p.imageUrl)}
             </div>
         </div>
     `;
@@ -360,6 +382,18 @@ function renderOrderPage() {
     bindWilayaChange();
     bindImageZoom();
     initScrollHeader(p, price);
+    prefillFromSession();
+}
+
+// On a login-required store the customer is signed in — prefill their
+// name/phone so they don't retype it (only fills empty fields).
+function prefillFromSession() {
+    const s = BWS.getCustomerSession && BWS.getCustomerSession();
+    if (!s) return;
+    const nameEl = document.getElementById('ofName');
+    const phoneEl = document.getElementById('ofPhone');
+    if (nameEl && !nameEl.value) nameEl.value = s.name || s.username || '';
+    if (phoneEl && !phoneEl.value) phoneEl.value = s.phone || '';
 }
 
 // Populate & observe: when product title scrolls behind the header,
@@ -587,7 +621,7 @@ function renderRelatedProducts(excludeUuid) {
         return `
             <a class="related-card" href="${escapeHtml(href)}" data-uuid="${escapeHtml(p.uuid)}">
                 <div class="related-card-img">
-                    ${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0), { lazy: true })}
+                    ${productImageOrPlaceholder(p.imageUrl, { lazy: true })}
                 </div>
                 <div class="related-card-body">
                     <div class="related-card-name">${escapeHtml(p.name)}</div>
