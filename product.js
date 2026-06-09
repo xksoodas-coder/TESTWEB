@@ -36,6 +36,20 @@ function imageOrPlaceholder(src, fallback) {
     if (src) return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallback)}'))">`;
     return `<div class="category-placeholder">${escapeHtml(fallback)}</div>`;
 }
+
+// Default product image: a neutral gray box icon (no site color, no letter).
+const PRODUCT_BOX_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8.5"/></svg>';
+function makeProductPlaceholder() {
+    const div = document.createElement('div');
+    div.className = 'product-placeholder';
+    div.innerHTML = PRODUCT_BOX_SVG;
+    return div;
+}
+window.makeProductPlaceholder = makeProductPlaceholder;
+function productImageOrPlaceholder(src) {
+    if (src) return `<img src="${escapeHtml(src)}" alt="" onerror="this.replaceWith(makeProductPlaceholder())">`;
+    return `<div class="product-placeholder">${PRODUCT_BOX_SVG}</div>`;
+}
 function bulletsHtml(text) {
     const lines = (text || '').split('\n').map(s => s.trim()).filter(Boolean);
     if (lines.length === 0) return '';
@@ -111,7 +125,7 @@ function renderProduct(p, direct) {
 
     page.innerHTML = `
         <div class="pd-top">
-            <div class="pd-image">${imageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}</div>
+            <div class="pd-image">${productImageOrPlaceholder(p.imageUrl)}</div>
             <div class="pd-info">
                 <h1 class="pd-name">${escapeHtml(p.name)}</h1>
                 <div class="pd-price">${BWS.formatPrice(price)}</div>

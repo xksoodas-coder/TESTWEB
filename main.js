@@ -379,7 +379,7 @@ function renderCartSidebar() {
         container.innerHTML = items.map(it => `
             <div class="sidebar-item" data-uuid="${escapeHtml(it.uuid)}">
                 <div class="sidebar-item-img">
-                    ${renderImageOrPlaceholder(it.imageUrl || null, (it.name || '?').charAt(0))}
+                    ${renderProductImageOrPlaceholder(it.imageUrl || null)}
                 </div>
                 <div class="sidebar-item-info">
                     <h4>${escapeHtml(it.name)}</h4>
@@ -555,6 +555,25 @@ function renderImageOrPlaceholder(src, fallbackText) {
     return `<div class="category-placeholder">${escapeHtml(fallbackText)}</div>`;
 }
 
+// Default product image: a neutral gray box icon (no site color, no letter).
+// Used everywhere a product lacks a real image.
+const PRODUCT_BOX_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8.5"/></svg>';
+
+function renderProductImageOrPlaceholder(src) {
+    if (src) {
+        return `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" onerror="this.replaceWith(makeProductPlaceholder())">`;
+    }
+    return `<div class="product-placeholder">${PRODUCT_BOX_SVG}</div>`;
+}
+
+function makeProductPlaceholder() {
+    const div = document.createElement('div');
+    div.className = 'product-placeholder';
+    div.innerHTML = PRODUCT_BOX_SVG;
+    return div;
+}
+window.makeProductPlaceholder = makeProductPlaceholder;
+
 // ===== Products Page =====
 async function renderProductsPage() {
     const params = new URLSearchParams(window.location.search);
@@ -650,7 +669,7 @@ function renderProductCard(p) {
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
             <a class="product-link" href="${detailUrl}">
                 <div class="product-image">
-                    ${renderImageOrPlaceholder(p.imageUrl, (p.name || '?').charAt(0))}
+                    ${renderProductImageOrPlaceholder(p.imageUrl)}
                 </div>
                 <div class="product-name">${escapeHtml(p.name)}</div>
             </a>
@@ -794,7 +813,7 @@ function renderCartPage() {
     container.innerHTML = cart.map(item => `
         <div class="cart-item" data-uuid="${escapeHtml(item.uuid)}">
             <div class="cart-item-image">
-                ${renderImageOrPlaceholder(item.imageUrl || null, (item.name || '?').charAt(0))}
+                ${renderProductImageOrPlaceholder(item.imageUrl || null)}
             </div>
             <div class="cart-item-info">
                 <h4>${escapeHtml(item.name)}</h4>

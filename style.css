@@ -348,6 +348,24 @@ img {
     font-weight: 700;
 }
 
+/* Default product image: neutral gray box icon (no site color, no letter). */
+.product-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #f1f1f3;
+    color: #9aa0a6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.product-placeholder svg {
+    width: 42%;
+    height: 42%;
+    max-width: 72px;
+    max-height: 72px;
+}
+
 .category-name {
     font-size: 12.5px;
     font-weight: 600;
