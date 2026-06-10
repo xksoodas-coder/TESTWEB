@@ -279,6 +279,7 @@ function applyThemeAndAnnouncement() {
     root.style.setProperty('--primary-dark', settings.theme.primaryDark);
     root.style.setProperty('--primary-light', settings.theme.primaryLight);
     root.style.setProperty('--products-per-row', settings.productsPerRow || 7);
+    root.style.setProperty('--families-per-row', settings.familiesPerRow || 4);
 
     document.querySelectorAll('.top-bar').forEach(bar => {
         const text = (settings.announcement || '').trim();

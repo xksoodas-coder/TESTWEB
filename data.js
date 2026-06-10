@@ -50,7 +50,11 @@ const BWS = (function () {
         // customers; 'direct' = public guest ordering via a landing form.
         orderMode: 'cart',
         // Products per row in the grid (4, 5, 6, or 7). Fewer = larger cards.
-        productsPerRow: 7
+        productsPerRow: 7,
+        // Families (categories) per row in the grid (4, 5, 6, or 7).
+        familiesPerRow: 4,
+        // سعر البيع للزائر/الزبون العابر (1..7) — يُضبط من تطبيق الهاتف.
+        guestPriceTier: 1
     };
 
     // In-memory cache, refilled per page load.
@@ -104,7 +108,11 @@ const BWS = (function () {
                 ? Math.min(200, Math.floor(pageSize)) : DEFAULT_SETTINGS.pageSize,
             orderMode: raw.orderMode === 'direct' ? 'direct' : 'cart',
             productsPerRow: [4, 5, 6, 7].includes(Number(raw.productsPerRow))
-                ? Number(raw.productsPerRow) : DEFAULT_SETTINGS.productsPerRow
+                ? Number(raw.productsPerRow) : DEFAULT_SETTINGS.productsPerRow,
+            familiesPerRow: [4, 5, 6, 7].includes(Number(raw.familiesPerRow))
+                ? Number(raw.familiesPerRow) : DEFAULT_SETTINGS.familiesPerRow,
+            guestPriceTier: [1, 2, 3, 4, 5, 6, 7].includes(Number(raw.guestPriceTier))
+                ? Number(raw.guestPriceTier) : DEFAULT_SETTINGS.guestPriceTier
         };
     }
     function setSettings(next) {
@@ -557,7 +565,12 @@ const BWS = (function () {
         // Which price tiers (1/2/3) this customer may use. Defaults to [1].
         allowedTiers() {
             const c = getCustomerSession();
-            const t = (c && Array.isArray(c.priceTiers)) ? c.priceTiers : [1];
+            // الزبون العابر (بلا حساب): يرى السعر المحدَّد للموقع من تطبيق الهاتف.
+            if (!c) {
+                const g = Number(getSettings().guestPriceTier) || 1;
+                return [(g >= 1 && g <= 7) ? g : 1];
+            }
+            const t = Array.isArray(c.priceTiers) ? c.priceTiers : [1];
             const clean = t.map(Number).filter(n => n >= 1 && n <= 7);
             return clean.length ? Array.from(new Set(clean)).sort((a, b) => a - b) : [1];
         },

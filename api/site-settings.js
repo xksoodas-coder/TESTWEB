@@ -45,6 +45,22 @@ export default async function handler(req, res) {
             if (r.rows.length) {
                 try { settings = JSON.parse(r.rows[0].settings_json); } catch { settings = null; }
             }
+            // سعر الزائر (الزبون العابر) يُضبط من تطبيق الهاتف ويُحفظ في جدول
+            // مستقل turso_web_settings. نُدمجه هنا ليقرأه الموقع.
+            try {
+                const w = await client.execute({
+                    sql: `SELECT json_payload FROM turso_web_settings WHERE store_id = ? LIMIT 1`,
+                    args: [access.storeId]
+                });
+                if (w.rows.length) {
+                    const wj = JSON.parse(w.rows[0].json_payload || '{}');
+                    const tier = Number(wj.guestPriceTier);
+                    if (tier >= 1 && tier <= 7) {
+                        settings = settings || {};
+                        settings.guestPriceTier = tier;
+                    }
+                }
+            } catch { /* الجدول قد لا يكون موجوداً بعد */ }
             res.setHeader('Cache-Control', 'no-store');
             res.status(200).json({ settings });
             return;
