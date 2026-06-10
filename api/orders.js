@@ -86,7 +86,8 @@ async function ensureSchema(client) {
     ], 'write');
     // Guest-order fields (added incrementally — ignore "duplicate column").
     for (const col of [
-        'wilaya TEXT', 'baladiya TEXT', 'delivery_type TEXT', 'is_guest INTEGER DEFAULT 0'
+        'wilaya TEXT', 'baladiya TEXT', 'delivery_type TEXT', 'is_guest INTEGER DEFAULT 0',
+        'delivery REAL DEFAULT 0'
     ]) {
         try { await client.execute(`ALTER TABLE bws_pending_orders ADD COLUMN ${col}`); } catch { /* exists */ }
     }
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
                 }
             }
 
-            const { items, notes, phone, name, wilaya, baladiya, deliveryType } = req.body || {};
+            const { items, notes, phone, name, wilaya, baladiya, deliveryType, delivery: deliveryFee } = req.body || {};
             if (!Array.isArray(items) || items.length === 0) {
                 res.status(400).json({ error: 'السلة فارغة' });
                 return;
@@ -173,6 +174,8 @@ export default async function handler(req, res) {
             }
 
             const total = cleanItems.reduce((s, it) => s + it.price * it.quantity, 0);
+            // سعر التوصيل (يُحتسب في الموقع حسب الولاية/البلدية ونوع التسليم).
+            const deliveryAmount = Math.max(0, Number(deliveryFee) || 0);
             const orderUuid = randomUUID();
             const createdAt = new Date().toISOString();
 
@@ -180,8 +183,8 @@ export default async function handler(req, res) {
                 sql: `INSERT INTO bws_pending_orders
                       (uuid, store_id, customer_uuid, customer_name, customer_phone,
                        items_json, total, status, notes, created_at,
-                       wilaya, baladiya, delivery_type, is_guest)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+                       wilaya, baladiya, delivery_type, is_guest, delivery)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
                 args: [
                     orderUuid,
                     storeId,
@@ -192,7 +195,7 @@ export default async function handler(req, res) {
                     total,
                     (notes || '').toString().slice(0, 1000),
                     createdAt,
-                    w, b, delivery, isGuest ? 1 : 0
+                    w, b, delivery, isGuest ? 1 : 0, deliveryAmount
                 ]
             });
 
@@ -212,7 +215,7 @@ export default async function handler(req, res) {
 
         if (req.method === 'GET') {
             const result = await client.execute({
-                sql: `SELECT uuid, total, status, items_json, created_at
+                sql: `SELECT uuid, total, delivery, status, items_json, created_at
                       FROM bws_pending_orders
                       WHERE store_id = ? AND customer_uuid = ?
                       ORDER BY created_at DESC LIMIT 50`,
@@ -221,6 +224,7 @@ export default async function handler(req, res) {
             const orders = result.rows.map(r => ({
                 uuid: r.uuid,
                 total: Number(r.total),
+                delivery: Number(r.delivery || 0),
                 status: r.status,
                 items: JSON.parse(r.items_json || '[]'),
                 createdAt: r.created_at

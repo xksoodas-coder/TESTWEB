@@ -1094,6 +1094,22 @@ a.product-link {
     color: var(--text-dark);
 }
 .guest-checkout-form select:disabled { opacity: .6; }
+.ck-delivery-row, .ck-grand-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13.5px;
+    margin-top: 4px;
+}
+.ck-delivery-row { color: var(--text-dark); }
+/* سعر التوصيل بلون لافت */
+.ck-delivery-fee { color: #d9480f; font-weight: 700; }
+.ck-grand-row {
+    font-weight: 700;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+    margin-top: 6px;
+}
 
 /* ===== Account button + debt dropdown ===== */
 .customer-info {

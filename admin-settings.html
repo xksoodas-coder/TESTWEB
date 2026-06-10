@@ -283,6 +283,40 @@
                 </div>
             </div>
 
+            <!-- Delivery prices -->
+            <div class="admin-card">
+                <h2>أسعار التوصيل</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    «توصيل إلى المكتب» يحتسب سعر <b>الولاية</b>. «توصيل إلى المنزل» يحتسب سعر
+                    <b>البلدية/الدائرة</b>. يظهر سعر التوصيل للزبون العابر عند الطلب من الموقع.
+                </p>
+
+                <!-- سعر المكتب (لكل ولاية) -->
+                <div style="margin-bottom:14px">
+                    <strong style="font-size:13px">سعر التوصيل إلى المكتب (حسب الولاية)</strong>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
+                        <select id="delOfficeWilaya" class="admin-input" style="flex:1;min-width:180px"></select>
+                        <input type="number" id="delOfficePrice" class="admin-input" min="0" step="any"
+                               placeholder="السعر" style="max-width:140px">
+                        <button type="button" class="primary-btn" id="delOfficeSave">حفظ</button>
+                    </div>
+                </div>
+
+                <!-- سعر المنزل (لكل بلدية) -->
+                <div style="margin-bottom:14px">
+                    <strong style="font-size:13px">سعر التوصيل إلى المنزل (حسب البلدية/الدائرة)</strong>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
+                        <select id="delHomeWilaya" class="admin-input" style="flex:1;min-width:160px"></select>
+                        <select id="delHomeBaladiya" class="admin-input" style="flex:1;min-width:160px" disabled></select>
+                        <input type="number" id="delHomePrice" class="admin-input" min="0" step="any"
+                               placeholder="السعر" style="max-width:140px">
+                        <button type="button" class="primary-btn" id="delHomeSave">حفظ</button>
+                    </div>
+                </div>
+
+                <div id="delList" style="font-size:13px"></div>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="primary-btn">حفظ الإعدادات</button>
                 <button type="button" class="ghost-btn" id="resetSettingsBtn">إعادة إلى الافتراضي</button>
@@ -294,6 +328,7 @@
     <div class="toast" id="toast"></div>
 
     <script src="data.js"></script>
+    <script src="geo-data.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

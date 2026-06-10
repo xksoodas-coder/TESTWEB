@@ -383,6 +383,17 @@ function renderOrderPage() {
     bindImageZoom();
     initScrollHeader(p, price);
     prefillFromSession();
+    updateSummary();
+
+    // الزبون المسجَّل: أخفِ الولاية/البلدية/التوصيل (لا توصيل له، يرى أسعاره فقط).
+    if (BWS.getCustomerSession()) {
+        const wil = document.getElementById('ofWilaya');
+        if (wil) { const r = wil.closest('.of-row'); if (r) r.style.display = 'none'; wil.required = false; }
+        const del = document.getElementById('ofDelivery');
+        if (del) del.style.display = 'none';
+        const dr = document.getElementById('summaryDelivery');
+        if (dr) { const row = dr.closest('.summary-row'); if (row) row.style.display = 'none'; }
+    }
 }
 
 // On a login-required store the customer is signed in — prefill their
@@ -491,19 +502,49 @@ function bindQtyControls() {
     });
 }
 
+// معرّف الولاية المختارة (من خاصية data-wid على الخيار).
+function selectedWilayaId() {
+    const wilSel = document.getElementById('ofWilaya');
+    if (!wilSel) return '';
+    const opt = wilSel.options[wilSel.selectedIndex];
+    return opt ? (opt.getAttribute('data-wid') || '') : '';
+}
+
+// سعر التوصيل الحالي حسب الولاية/البلدية ونوع التسليم.
+function currentDeliveryFee() {
+    const wid = selectedWilayaId();
+    if (!wid) return 0;
+    const baladiya = (document.getElementById('ofBaladiya')?.value || '').trim();
+    const type = document.getElementById('ofDelivery')?.value || 'home';
+    return BWS.deliveryFee(wid, baladiya, type);
+}
+
 function updateSummary() {
     const p = _selectedProduct;
     if (!p) return;
     const price = BWS.effectivePrice(p);
     const total = price * _currentQty;
+    const fee = currentDeliveryFee();
 
     const badge = document.getElementById('summaryQtyBadge');
     const itemPrice = document.getElementById('summaryItemPrice');
+    const deliveryEl = document.getElementById('summaryDelivery');
     const totalEl = document.getElementById('summaryTotal');
 
     if (badge) badge.textContent = 'x' + _currentQty;
     if (itemPrice) itemPrice.textContent = BWS.formatPrice(total);
-    if (totalEl) totalEl.textContent = BWS.formatPrice(total);
+    if (deliveryEl) {
+        if (!selectedWilayaId()) {
+            deliveryEl.textContent = 'اختر ولاية التسليم';
+            deliveryEl.style.color = '';
+            deliveryEl.style.fontWeight = '';
+        } else {
+            deliveryEl.textContent = BWS.formatPrice(fee);
+            deliveryEl.style.color = '#d9480f';
+            deliveryEl.style.fontWeight = '700';
+        }
+    }
+    if (totalEl) totalEl.textContent = BWS.formatPrice(total + fee);
 }
 
 function bindWilayaChange() {
@@ -512,12 +553,11 @@ function bindWilayaChange() {
     const balSel = document.getElementById('ofBaladiya');
 
     wilSel.addEventListener('change', () => {
-        const deliveryEl = document.getElementById('summaryDelivery');
-        if (wilSel.value) {
-            if (deliveryEl) deliveryEl.textContent = 'اختر ولاية التسليم';
-        }
         populateBaladiyas(wilSel, balSel);
+        updateSummary();
     });
+    balSel?.addEventListener('change', updateSummary);
+    document.getElementById('ofDelivery')?.addEventListener('change', updateSummary);
 }
 
 // Fill the baladiya dropdown with the communes of the selected wilaya,
@@ -552,7 +592,7 @@ function bindSubmit() {
         const deliveryType = document.getElementById('ofDelivery')?.value || 'home';
 
         if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
-        if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
+        if (!BWS.getCustomerSession() && !wilaya) { showToast('الرجاء اختيار الولاية'); return; }
 
         const items = [{
             uuid: p.uuid,
@@ -567,7 +607,8 @@ function bindSubmit() {
         const orig = btn.textContent;
         btn.textContent = 'جاري الإرسال...';
 
-        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes });
+        const delivery = currentDeliveryFee();
+        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes, delivery });
         if (res.ok) {
             document.getElementById('orderPage').innerHTML = `
                 <div class="order-success">

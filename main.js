@@ -914,7 +914,8 @@ function renderCartPage() {
                 unitType: it.unitType || 'قطعة'
             }));
             const result = await BWS.submitGuestOrder({
-                items, name, phone, wilaya, baladiya, deliveryType, notes
+                items, name, phone, wilaya, baladiya, deliveryType, notes,
+                delivery: cartDeliveryFee()
             });
             if (result.ok) {
                 BWS.clearCart();
@@ -984,13 +985,47 @@ function ensureGuestCheckoutForm(summary) {
             <option value="office">🏢 توصيل إلى المكتب</option>
         </select>
         <input type="text" id="ckNotes" placeholder="ملاحظة (اختيارية)">
+        <div class="ck-delivery-row">
+            <span>🚚 سعر التوصيل</span>
+            <span id="ckDeliveryFee" class="ck-delivery-fee">0.00 د.ج</span>
+        </div>
+        <div class="ck-grand-row">
+            <span>الإجمالي مع التوصيل</span>
+            <span id="ckGrandTotal"></span>
+        </div>
     `;
     const checkoutBtn = document.getElementById('checkoutBtn');
     summary.insertBefore(form, checkoutBtn);
 
     const wilSel = document.getElementById('ckWilaya');
     const balSel = document.getElementById('ckBaladiya');
-    wilSel.addEventListener('change', () => populateCartBaladiyas(wilSel, balSel));
+    wilSel.addEventListener('change', () => {
+        populateCartBaladiyas(wilSel, balSel);
+        updateCartDeliveryUI();
+    });
+    balSel.addEventListener('change', updateCartDeliveryUI);
+    document.getElementById('ckDelivery').addEventListener('change', updateCartDeliveryUI);
+    updateCartDeliveryUI();
+}
+
+// سعر التوصيل الحالي في السلة (حسب الولاية/البلدية ونوع التسليم).
+function cartDeliveryFee() {
+    const wilSel = document.getElementById('ckWilaya');
+    if (!wilSel) return 0;
+    const opt = wilSel.options[wilSel.selectedIndex];
+    const wid = opt ? (opt.getAttribute('data-wid') || '') : '';
+    if (!wid) return 0;
+    const baladiya = (document.getElementById('ckBaladiya')?.value || '').trim();
+    const type = document.getElementById('ckDelivery')?.value || 'home';
+    return BWS.deliveryFee(wid, baladiya, type);
+}
+
+function updateCartDeliveryUI() {
+    const fee = cartDeliveryFee();
+    const feeEl = document.getElementById('ckDeliveryFee');
+    const grandEl = document.getElementById('ckGrandTotal');
+    if (feeEl) feeEl.textContent = BWS.formatPrice(fee);
+    if (grandEl) grandEl.textContent = BWS.formatPrice(BWS.cartTotal() + fee);
 }
 
 function removeGuestCheckoutForm() {

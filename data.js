@@ -54,7 +54,10 @@ const BWS = (function () {
         // Families (categories) per row in the grid (4, 5, 6, or 7).
         familiesPerRow: 4,
         // سعر البيع للزائر/الزبون العابر (1..7) — يُضبط من تطبيق الهاتف.
-        guestPriceTier: 1
+        guestPriceTier: 1,
+        // أسعار التوصيل: office = سعر المكتب لكل ولاية (مفتاح = معرّف الولاية)،
+        // home = سعر المنزل لكل بلدية (مفتاح = "wilayaId|labelالبلدية").
+        delivery: { office: {}, home: {} }
     };
 
     // In-memory cache, refilled per page load.
@@ -112,7 +115,13 @@ const BWS = (function () {
             familiesPerRow: [4, 5, 6, 7].includes(Number(raw.familiesPerRow))
                 ? Number(raw.familiesPerRow) : DEFAULT_SETTINGS.familiesPerRow,
             guestPriceTier: [1, 2, 3, 4, 5, 6, 7].includes(Number(raw.guestPriceTier))
-                ? Number(raw.guestPriceTier) : DEFAULT_SETTINGS.guestPriceTier
+                ? Number(raw.guestPriceTier) : DEFAULT_SETTINGS.guestPriceTier,
+            delivery: (raw.delivery && typeof raw.delivery === 'object')
+                ? {
+                    office: (raw.delivery.office && typeof raw.delivery.office === 'object') ? raw.delivery.office : {},
+                    home: (raw.delivery.home && typeof raw.delivery.home === 'object') ? raw.delivery.home : {}
+                  }
+                : { office: {}, home: {} }
         };
     }
     function setSettings(next) {
@@ -507,7 +516,7 @@ const BWS = (function () {
 
         // ----- guest order (direct / public mode) -----
         async submitGuestOrder({ items = [], name = '', phone = '', wilaya = '',
-                                 baladiya = '', deliveryType = 'home', notes = '' } = {}) {
+                                 baladiya = '', deliveryType = 'home', notes = '', delivery = 0 } = {}) {
             const clean = (items || []).filter(it => it && it.uuid && Number(it.quantity) > 0);
             if (clean.length === 0) return { ok: false, error: 'لم تختر أي منتج' };
             if (!name.trim() || !phone.trim()) {
@@ -522,7 +531,8 @@ const BWS = (function () {
                             price: Number(it.price || 0), quantity: Number(it.quantity),
                             unitType: it.unitType || 'قطعة'
                         })),
-                        name, phone, wilaya, baladiya, deliveryType, notes
+                        name, phone, wilaya, baladiya, deliveryType, notes,
+                        delivery: Number(delivery) || 0
                     }
                 });
                 return { ok: true, uuid: data.uuid, total: data.total };
@@ -626,6 +636,21 @@ const BWS = (function () {
             return this.priceForTier(prices, tier);
         },
         tierLabel(t) { return 'سعر ' + t; },
+
+        // ----- سعر التوصيل -----
+        // office: حسب الولاية (المعرّف). home: حسب البلدية ("wilayaId|label").
+        deliveryFee(wilayaId, baladiyaLabel, type) {
+            // الزبون المسجَّل لا يُحتسب له توصيل إطلاقاً (التوصيل للزبون العابر فقط).
+            if (getCustomerSession()) return 0;
+            const d = getSettings().delivery || { office: {}, home: {} };
+            const wid = String(wilayaId || '');
+            if (!wid) return 0;
+            if (type === 'office') {
+                return Number(d.office?.[wid] ?? 0) || 0;
+            }
+            const key = wid + '|' + String(baladiyaLabel || '');
+            return Number(d.home?.[key] ?? 0) || 0;
+        },
 
         // ----- formatting -----
         formatPrice(value) {

@@ -334,6 +334,9 @@ function wireSettingsPage() {
         previewLight: document.getElementById('previewLight')
     };
 
+    // أسعار التوصيل: office[wilayaId]=price ، home["wilayaId|labelالبلدية"]=price.
+    let _delivery = { office: {}, home: {} };
+
     function syncPageSizeVisibility() {
         if (!fields.pageSizeWrap) return;
         fields.pageSizeWrap.style.display = fields.displayProducts.checked ? '' : 'none';
@@ -382,8 +385,104 @@ function wireSettingsPage() {
         if (pprField) pprField.checked = true;
         const fprField = fields['fpr' + (s.familiesPerRow || 4)];
         if (fprField) fprField.checked = true;
+        _delivery = (s.delivery && typeof s.delivery === 'object')
+            ? {
+                office: { ...(s.delivery.office || {}) },
+                home: { ...(s.delivery.home || {}) }
+              }
+            : { office: {}, home: {} };
+        renderDeliveryList();
         syncPageSizeVisibility();
         updatePreview();
+    }
+
+    // ── أسعار التوصيل ──
+    const _wilayas = window.BWS_WILAYAS || [];
+    const _communes = window.BWS_COMMUNES || {};
+    const _widName = {};
+    for (const w of _wilayas) _widName[String(w.id)] = `${w.code} - ${w.name}`;
+
+    function setupDeliveryUI() {
+        const off = document.getElementById('delOfficeWilaya');
+        const homeW = document.getElementById('delHomeWilaya');
+        if (!off || !homeW) return;
+        const opts = '<option value="">اختر الولاية</option>' +
+            _wilayas.map(w => `<option value="${w.id}">${escapeHtmlAdmin(w.code + ' - ' + w.name)}</option>`).join('');
+        off.innerHTML = opts;
+        homeW.innerHTML = opts;
+
+        const homeB = document.getElementById('delHomeBaladiya');
+        homeW.addEventListener('change', () => {
+            const wid = homeW.value;
+            const list = _communes[String(wid)] || [];
+            homeB.innerHTML = '<option value="">اختر البلدية / الدائرة</option>' +
+                list.map(c => {
+                    const label = (c.code ? c.code + ' - ' : '') + c.name;
+                    return `<option value="${escapeHtmlAdmin(label)}">${escapeHtmlAdmin(label)}</option>`;
+                }).join('');
+            homeB.disabled = list.length === 0;
+        });
+
+        document.getElementById('delOfficeSave').addEventListener('click', () => {
+            const wid = off.value;
+            const price = Number(document.getElementById('delOfficePrice').value);
+            if (!wid) { showToastAdmin('اختر الولاية'); return; }
+            if (!(price >= 0)) { showToastAdmin('أدخل سعراً صحيحاً'); return; }
+            _delivery.office[wid] = price;
+            document.getElementById('delOfficePrice').value = '';
+            renderDeliveryList();
+            showToastAdmin('أُضيف — اضغط «حفظ الإعدادات» للحفظ النهائي');
+        });
+
+        document.getElementById('delHomeSave').addEventListener('click', () => {
+            const wid = homeW.value;
+            const label = homeB.value;
+            const price = Number(document.getElementById('delHomePrice').value);
+            if (!wid || !label) { showToastAdmin('اختر الولاية والبلدية'); return; }
+            if (!(price >= 0)) { showToastAdmin('أدخل سعراً صحيحاً'); return; }
+            _delivery.home[`${wid}|${label}`] = price;
+            document.getElementById('delHomePrice').value = '';
+            renderDeliveryList();
+            showToastAdmin('أُضيف — اضغط «حفظ الإعدادات» للحفظ النهائي');
+        });
+    }
+
+    function renderDeliveryList() {
+        const el = document.getElementById('delList');
+        if (!el) return;
+        const rows = [];
+        const officeKeys = Object.keys(_delivery.office || {});
+        const homeKeys = Object.keys(_delivery.home || {});
+        if (officeKeys.length) {
+            rows.push('<div style="margin-top:10px;font-weight:700">🏢 المكتب (حسب الولاية)</div>');
+            for (const wid of officeKeys) {
+                rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee">
+                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} — <b>${_delivery.office[wid]}</b> د.ج</span>
+                    <button type="button" class="ghost-btn del-rm" data-kind="office" data-key="${escapeHtmlAdmin(wid)}">حذف</button>
+                </div>`);
+            }
+        }
+        if (homeKeys.length) {
+            rows.push('<div style="margin-top:10px;font-weight:700">🏠 المنزل (حسب البلدية)</div>');
+            for (const key of homeKeys) {
+                const wid = key.split('|')[0];
+                const label = key.slice(wid.length + 1);
+                rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee">
+                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} / ${escapeHtmlAdmin(label)} — <b>${_delivery.home[key]}</b> د.ج</span>
+                    <button type="button" class="ghost-btn del-rm" data-kind="home" data-key="${escapeHtmlAdmin(key)}">حذف</button>
+                </div>`);
+            }
+        }
+        el.innerHTML = rows.join('') || '<p class="muted" style="font-size:12px">لا توجد أسعار توصيل بعد.</p>';
+        el.querySelectorAll('.del-rm').forEach(b => {
+            b.addEventListener('click', () => {
+                const kind = b.getAttribute('data-kind');
+                const key = b.getAttribute('data-key');
+                if (kind === 'office') delete _delivery.office[key];
+                else delete _delivery.home[key];
+                renderDeliveryList();
+            });
+        });
     }
 
     async function load() {
@@ -395,6 +494,7 @@ function wireSettingsPage() {
     syncColorToHex(fields.primary, fields.primaryHex);
     syncColorToHex(fields.primaryDark, fields.primaryDarkHex);
     syncColorToHex(fields.primaryLight, fields.primaryLightHex);
+    setupDeliveryUI();
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -414,7 +514,8 @@ function wireSettingsPage() {
             pageSize,
             orderMode: fields.orderModeDirect.checked ? 'direct' : 'cart',
             productsPerRow: Number(document.querySelector('input[name="productsPerRow"]:checked')?.value || 7),
-            familiesPerRow: Number(document.querySelector('input[name="familiesPerRow"]:checked')?.value || 4)
+            familiesPerRow: Number(document.querySelector('input[name="familiesPerRow"]:checked')?.value || 4),
+            delivery: _delivery
         };
 
         const btn = form.querySelector('button[type="submit"]');
