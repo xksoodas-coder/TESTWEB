@@ -562,6 +562,7 @@ async function renderAllProductsMode(grid, pageSize) {
         grid.innerHTML = products.map(renderProductCard).join('');
         wireProductCards(grid, products, false);
         setupPriceTierBar(products, grid, false);
+        deferHydrate(grid);
         renderPager(total);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -597,6 +598,55 @@ function makeProductPlaceholder() {
     return div;
 }
 window.makeProductPlaceholder = makeProductPlaceholder;
+
+// ===== Two-phase product images (text-first, images-after) =====
+// Grid cards paint instantly with a neutral gray box; the real image URL rides
+// on the container's data-img and is loaded only AFTER the cards are on screen,
+// near the viewport. So a category opens fast (all product text/prices) and the
+// images stream in progressively as the customer reads/scrolls.
+function renderDeferredProductImage(src) {
+    const data = src ? ` data-img="${escapeHtml(src)}"` : '';
+    return `<div class="product-image"${data}><div class="product-placeholder">${PRODUCT_BOX_SVG}</div></div>`;
+}
+
+function hydrateProductImages(root) {
+    if (!root) return;
+    const boxes = Array.from(root.querySelectorAll('.product-image[data-img]'));
+    if (!boxes.length) return;
+
+    const swap = (box) => {
+        const src = box.getAttribute('data-img');
+        box.removeAttribute('data-img');
+        if (!src) return;
+        const img = new Image();
+        img.alt = '';
+        img.decoding = 'async';
+        img.onload = () => {
+            box.innerHTML = '';
+            box.appendChild(img);
+            box.classList.add('img-ready');
+        };
+        img.onerror = () => { /* keep the gray placeholder */ };
+        img.src = src;
+    };
+
+    if (!('IntersectionObserver' in window)) {
+        boxes.forEach(swap);
+        return;
+    }
+    const obs = new IntersectionObserver((entries, o) => {
+        for (const e of entries) {
+            if (e.isIntersecting) { o.unobserve(e.target); swap(e.target); }
+        }
+    }, { rootMargin: '300px 0px', threshold: 0.01 });
+    boxes.forEach(b => obs.observe(b));
+}
+
+// Start image loading only after the product cards have painted (two frames),
+// so the list text is visible first, then the images begin.
+function deferHydrate(grid) {
+    requestAnimationFrame(() => requestAnimationFrame(() => hydrateProductImages(grid)));
+}
 
 // ===== Products Page =====
 async function renderProductsPage() {
@@ -672,6 +722,7 @@ async function renderProductsPage() {
     grid.innerHTML = products.map(renderProductCard).join('');
     wireProductCards(grid, products, favoritesMode);
     setupPriceTierBar(products, grid, favoritesMode);
+    deferHydrate(grid);
 }
 
 function renderProductCard(p) {
@@ -698,9 +749,7 @@ function renderProductCard(p) {
     return `
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
             <a class="product-link" href="${orderUrl}">
-                <div class="product-image">
-                    ${renderProductImageOrPlaceholder(p.imageUrl)}
-                </div>
+                ${renderDeferredProductImage(p.imageUrl)}
                 <div class="product-name">${escapeHtml(p.name)}</div>
             </a>
             <div class="product-price">${BWS.formatPrice(BWS.effectivePrice(p))}</div>
@@ -748,6 +797,7 @@ function setupPriceTierBar(products, grid, favoritesMode) {
             grid.innerHTML = products.map(renderProductCard).join('');
             wireProductCards(grid, products, favoritesMode);
             setupPriceTierBar(products, grid, favoritesMode);
+            deferHydrate(grid);
         });
     });
 }

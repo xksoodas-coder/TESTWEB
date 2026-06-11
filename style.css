@@ -420,6 +420,16 @@ img {
     object-fit: cover;
 }
 
+/* Fade the deferred image in once it loads (two-phase: text first, image after). */
+.product-image.img-ready img {
+    animation: bws-img-fade 0.25s ease-out;
+}
+
+@keyframes bws-img-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
 .product-image .category-placeholder {
     font-size: 22px;
 }
