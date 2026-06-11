@@ -22,6 +22,9 @@ const BWS = (function () {
     // Set once per page load after /api/bootstrap primes the caches below, so
     // the individual fetchers (settings/tenant/store/families) skip re-fetching.
     let _bootstrapApplied = false;
+    // First page of a category, preloaded by bootstrap on products.html; consumed
+    // once by renderFamilyPaged so the category page needs no extra request.
+    let _preloadedFamily = null;
 
     // The storefront's tenant is derived from the link: a custom domain / a
     // subdomain (server reads Host) or, on the platform/preview host, a
@@ -226,10 +229,27 @@ const BWS = (function () {
         // resolve without further network. Best-effort: on any failure the caller
         // falls back to the per-endpoint path. Returns the raw payload or null.
         async bootstrap() {
+            // On a category page, ask the server for that category's first page
+            // too, so products.html needs no separate /api/products request.
+            let famId = 0;
+            try { famId = Number(new URLSearchParams(location.search).get('familyId')) || 0; }
+            catch { famId = 0; }
+            const path = '/api/bootstrap' + (famId > 0 ? ('?familyId=' + famId) : '');
+
             let data;
-            try { data = await apiFetch('/api/bootstrap', { method: 'GET' }); }
+            try { data = await apiFetch(path, { method: 'GET' }); }
             catch { return null; }
             if (!data) return null;
+
+            // Stash the preloaded category page for renderFamilyPaged() to use.
+            if (data.products && Array.isArray(data.products.products) &&
+                Number(data.products.familyId) > 0) {
+                _preloadedFamily = {
+                    familyId: Number(data.products.familyId),
+                    products: data.products.products,
+                    total: Number(data.products.total || 0)
+                };
+            }
 
             if (data.tenant) {
                 _tenantInfo = data.tenant;
@@ -260,6 +280,15 @@ const BWS = (function () {
             }
             _bootstrapApplied = true;
             return data;
+        },
+        // Consume (once) the category page preloaded by bootstrap, if it matches.
+        takePreloadedFamilyPage(familyId) {
+            if (_preloadedFamily && _preloadedFamily.familyId === Number(familyId)) {
+                const p = _preloadedFamily;
+                _preloadedFamily = null;
+                return p;
+            }
+            return null;
         },
         // Admin-only: persist the store's settings on the server.
         async saveSiteSettings(settings) {
@@ -380,6 +409,16 @@ const BWS = (function () {
             );
             _productsByFamily.set(familyName, data.products || []);
             return data.products || [];
+        },
+        // Paginated family fetch — loads one page of a category's products so a
+        // big category opens fast (first page) and the rest stream in on scroll.
+        async fetchProductsForFamilyPaged(familyName, { page = 1, pageSize = 30 } = {}) {
+            const offset = Math.max(0, (page - 1) * pageSize);
+            const data = await apiFetch(
+                `/api/products?family=${encodeURIComponent(familyName)}&limit=${pageSize}&offset=${offset}`,
+                { method: 'GET' }
+            );
+            return { products: data.products || [], total: Number(data.total || 0) };
         },
         async fetchFavoriteProducts() {
             const data = await apiFetch('/api/products?favorites=1', { method: 'GET' });

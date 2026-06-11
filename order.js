@@ -64,6 +64,39 @@ function productImageOrPlaceholder(src, opts = {}) {
     return `<div class="product-placeholder">${PRODUCT_BOX_SVG}</div>`;
 }
 
+// Two-phase thumbnails for the related grid: the card text paints first with a
+// gray box; the real image (data-img) is loaded afterwards, near the viewport,
+// by hydrateThumbs(). The hero image stays eager (high priority) — only these
+// secondary thumbnails are deferred.
+function deferredThumb(src) {
+    const data = src ? ` data-img="${escapeHtml(src)}"` : '';
+    return `<div class="related-card-img"${data}><div class="product-placeholder">${PRODUCT_BOX_SVG}</div></div>`;
+}
+
+function hydrateThumbs(root) {
+    if (!root) return;
+    const boxes = Array.from(root.querySelectorAll('.related-card-img[data-img]'));
+    if (!boxes.length) return;
+
+    const swap = (box) => {
+        const src = box.getAttribute('data-img');
+        box.removeAttribute('data-img');
+        if (!src) return;
+        const img = new Image();
+        img.alt = '';
+        img.decoding = 'async';
+        img.onload = () => { box.innerHTML = ''; box.appendChild(img); box.classList.add('img-ready'); };
+        img.onerror = () => { /* keep the gray placeholder */ };
+        img.src = src;
+    };
+
+    if (!('IntersectionObserver' in window)) { boxes.forEach(swap); return; }
+    const obs = new IntersectionObserver((entries, o) => {
+        for (const e of entries) if (e.isIntersecting) { o.unobserve(e.target); swap(e.target); }
+    }, { rootMargin: '300px 0px', threshold: 0.01 });
+    boxes.forEach(b => obs.observe(b));
+}
+
 // Build the short-description badge markup (one badge per non-empty line).
 function badgesHtml(text) {
     if (!text) return '';
@@ -97,6 +130,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
     applyTheme();
+
+    // One request resolves tenant + settings + store and primes their caches,
+    // so the resolveTenant/fetchSiteSettings/branding steps below need no extra
+    // round trips. Best-effort: on failure each step falls back to its endpoint.
+    await BWS.bootstrap();
 
     // Resolve tenant
     const tenant = await BWS.resolveTenant();
@@ -661,13 +699,14 @@ function renderRelatedProducts(excludeUuid) {
         const href = withStore('order.html?product=' + encodeURIComponent(p.uuid));
         return `
             <a class="related-card" href="${escapeHtml(href)}" data-uuid="${escapeHtml(p.uuid)}">
-                <div class="related-card-img">
-                    ${productImageOrPlaceholder(p.imageUrl, { lazy: true })}
-                </div>
+                ${deferredThumb(p.imageUrl)}
                 <div class="related-card-body">
                     <div class="related-card-name">${escapeHtml(p.name)}</div>
                     <div class="related-card-price">${BWS.formatPrice(price)}</div>
                 </div>
             </a>`;
     }).join('');
+
+    // Text-first, images-after: start thumbnails only after the cards paint.
+    requestAnimationFrame(() => requestAnimationFrame(() => hydrateThumbs(container)));
 }

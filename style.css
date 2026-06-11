@@ -421,13 +421,66 @@ img {
 }
 
 /* Fade the deferred image in once it loads (two-phase: text first, image after). */
-.product-image.img-ready img {
+.product-image.img-ready img,
+.related-card-img.img-ready img {
     animation: bws-img-fade 0.25s ease-out;
 }
 
 @keyframes bws-img-fade {
     from { opacity: 0; }
     to   { opacity: 1; }
+}
+
+/* ===== Skeleton cards (category first-page loading) ===== */
+.product-card.skeleton {
+    pointer-events: none;
+    border-color: #eee;
+}
+
+.product-card.skeleton .sk-box {
+    background: #eef0f2;
+}
+
+.product-card.skeleton .sk-line {
+    height: 11px;
+    border-radius: 6px;
+    background: #eef0f2;
+    margin: 8px auto 0;
+    width: 80%;
+}
+
+.product-card.skeleton .sk-line.sk-short {
+    width: 50%;
+}
+
+.product-card.skeleton .sk-box,
+.product-card.skeleton .sk-line {
+    position: relative;
+    overflow: hidden;
+}
+
+.product-card.skeleton .sk-box::after,
+.product-card.skeleton .sk-line::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    animation: bws-shimmer 1.2s infinite;
+}
+
+@keyframes bws-shimmer {
+    100% { transform: translateX(100%); }
+}
+
+/* ===== Infinite-scroll sentinel (category view) ===== */
+.grid-sentinel {
+    width: 100%;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 14px 0;
+    min-height: 1px;
 }
 
 .product-image .category-placeholder {

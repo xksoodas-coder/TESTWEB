@@ -649,6 +649,18 @@ function deferHydrate(grid) {
 }
 
 // ===== Products Page =====
+// Lightweight skeleton cards shown while a category's first page loads.
+function skeletonCards(n) {
+    let s = '';
+    for (let i = 0; i < n; i++) {
+        s += '<div class="product-card skeleton" aria-hidden="true">'
+           + '<div class="product-image sk-box"></div>'
+           + '<div class="sk-line"></div><div class="sk-line sk-short"></div>'
+           + '</div>';
+    }
+    return s;
+}
+
 async function renderProductsPage() {
     const params = new URLSearchParams(window.location.search);
     const favoritesMode = params.get('favorites') === '1';
@@ -659,70 +671,157 @@ async function renderProductsPage() {
     const grid = document.getElementById('productsGrid');
     const emptyState = document.getElementById('emptyState');
 
-    titleEl.textContent = 'جاري التحميل...';
-    subtitleEl.textContent = '';
-
-    let products;
-
+    // ----- Favourites: small set, load all at once (unchanged) -----
     if (favoritesMode) {
         titleEl.textContent = 'منتجاتي المفضلة';
         subtitleEl.textContent = 'المنتجات التي أضفتها للمفضلة';
+        grid.innerHTML = skeletonCards(6);
+        let products;
         try {
             products = await BWS.fetchFavoriteProducts();
         } catch (err) {
+            grid.innerHTML = '';
             titleEl.textContent = 'تعذّر تحميل المفضلة';
             subtitleEl.textContent = err.message || '';
             emptyState.style.display = 'block';
             return;
         }
         if (products.length === 0) {
+            grid.innerHTML = '';
             grid.style.display = 'none';
             emptyState.style.display = 'block';
             emptyState.innerHTML = '<p>لا توجد منتجات في المفضلة بعد. اضغط على ♥ في أي منتج لإضافته.</p>';
             return;
         }
-    } else {
-        const family = await BWS.getFamilyById(familyId);
-        if (!family) {
-            titleEl.textContent = 'تصنيف غير موجود';
-            subtitleEl.textContent = 'الرجاء اختيار تصنيف من قائمة التصنيفات';
-            emptyState.style.display = 'block';
-            return;
-        }
-
-        const hidden = new Set(BWS.getHiddenIds());
-        if (hidden.has(family.id)) {
-            titleEl.textContent = 'هذا التصنيف غير متاح';
-            subtitleEl.textContent = '';
-            emptyState.style.display = 'block';
-            return;
-        }
-
-        titleEl.textContent = family.name;
-        subtitleEl.textContent = 'منتجات التصنيف';
-
-        try {
-            products = await BWS.fetchProductsForFamily(family.name);
-        } catch (err) {
-            titleEl.textContent = 'تعذّر تحميل المنتجات';
-            subtitleEl.textContent = err.message || '';
-            emptyState.style.display = 'block';
-            return;
-        }
-
-        if (products.length === 0) {
-            grid.style.display = 'none';
-            emptyState.style.display = 'block';
-            return;
-        }
+        grid.style.display = '';
+        emptyState.style.display = 'none';
+        grid.innerHTML = products.map(renderProductCard).join('');
+        wireProductCards(grid, products, true);
+        setupPriceTierBar(products, grid, true);
+        deferHydrate(grid);
+        return;
     }
+
+    // ----- Category: paginated + infinite scroll (light & fast) -----
+    const family = await BWS.getFamilyById(familyId);
+    if (!family) {
+        titleEl.textContent = 'تصنيف غير موجود';
+        subtitleEl.textContent = 'الرجاء اختيار تصنيف من قائمة التصنيفات';
+        emptyState.style.display = 'block';
+        return;
+    }
+    if (new Set(BWS.getHiddenIds()).has(family.id)) {
+        titleEl.textContent = 'هذا التصنيف غير متاح';
+        subtitleEl.textContent = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    // Name is known instantly (families primed by bootstrap) → no title flicker.
+    titleEl.textContent = family.name;
+    subtitleEl.textContent = 'منتجات التصنيف';
+    await renderFamilyPaged(family, grid, emptyState);
+}
+
+// Category view: load page 1 immediately (with a skeleton placeholder), then
+// auto-load further pages as the customer nears the bottom (IntersectionObserver
+// sentinel). Each page renders text-first; its images hydrate afterwards.
+async function renderFamilyPaged(family, grid, emptyState) {
+    const size = Math.max(12, Number(BWS.getSettings().pageSize) || 30);
+    const all = [];
+    let page = 1, total = 0, loading = false, done = false;
 
     grid.style.display = '';
     emptyState.style.display = 'none';
-    grid.innerHTML = products.map(renderProductCard).join('');
-    wireProductCards(grid, products, favoritesMode);
-    setupPriceTierBar(products, grid, favoritesMode);
-    deferHydrate(grid);
+    grid.innerHTML = skeletonCards(Math.min(size, 10));
+
+    // A sentinel placed after the grid; when it scrolls into view we load more.
+    const section = grid.closest('.content-section') || grid.parentElement;
+    let sentinel = document.getElementById('gridSentinel');
+    if (!sentinel) {
+        sentinel = document.createElement('div');
+        sentinel.id = 'gridSentinel';
+        sentinel.className = 'grid-sentinel';
+        section.appendChild(sentinel);
+    }
+    sentinel.style.display = 'none';
+
+    let observer = null;
+    const finish = () => {
+        done = true;
+        sentinel.style.display = 'none';
+        if (observer) observer.disconnect();
+    };
+
+    // Render one page's products (shared by the bootstrap preload + loadNext).
+    function appendPage(products) {
+        if (page === 1) {
+            grid.innerHTML = ''; // clear the skeleton
+            if (products.length === 0) {
+                grid.style.display = 'none';
+                emptyState.style.display = 'block';
+                finish();
+                return;
+            }
+        }
+        all.push(...products);
+        grid.insertAdjacentHTML('beforeend', products.map(renderProductCard).join(''));
+        wireProductCards(grid, all, false);
+        setupPriceTierBar(all, grid, false);
+        deferHydrate(grid);
+
+        page += 1;
+        if (all.length >= total || products.length < size) {
+            finish();
+        } else {
+            sentinel.textContent = '';
+            sentinel.style.display = '';
+            // If the page didn't fill the viewport, keep going.
+            requestAnimationFrame(() => {
+                const r = sentinel.getBoundingClientRect();
+                if (r.top < window.innerHeight + 200) loadNext();
+            });
+        }
+    }
+
+    async function loadNext() {
+        if (loading || done) return;
+        loading = true;
+        if (page > 1) sentinel.textContent = 'جاري التحميل...';
+        let res;
+        try {
+            res = await BWS.fetchProductsForFamilyPaged(family.name, { page, pageSize: size });
+        } catch (err) {
+            loading = false;
+            if (page === 1) {
+                grid.innerHTML = '';
+                grid.style.display = 'none';
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `<p>${escapeHtml(err.message || 'تعذّر تحميل المنتجات')}</p>`;
+                finish();
+            }
+            return;
+        }
+        total = res.total || 0;
+        appendPage(res.products || []);
+        loading = false;
+    }
+
+    if ('IntersectionObserver' in window) {
+        observer = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) loadNext();
+        }, { rootMargin: '400px 0px' });
+        observer.observe(sentinel);
+    }
+
+    // Use the page bootstrap already preloaded (no extra request); else fetch it.
+    const pre = BWS.takePreloadedFamilyPage(family.id);
+    if (pre) {
+        total = pre.total;
+        appendPage(pre.products);
+    } else {
+        await loadNext();
+    }
 }
 
 function renderProductCard(p) {
@@ -813,6 +912,10 @@ function priceArrowHtml(it) {
 function wireProductCards(grid, products, favoritesMode) {
     const productByUuid = new Map(products.map(p => [p.uuid, p]));
     grid.querySelectorAll('.product-card').forEach(card => {
+        // Idempotent: skip cards already wired (so appended pages during
+        // infinite scroll don't double-bind their listeners).
+        if (card.dataset.wired) return;
+        card.dataset.wired = '1';
         const uuid = card.dataset.uuid;
 
         // Add to cart (the small cart-icon button; the big button is an order link).

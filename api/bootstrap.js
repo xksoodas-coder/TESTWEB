@@ -146,20 +146,36 @@ export default async function handler(req, res) {
             }
         } catch { /* store/families tables may not exist yet */ }
 
-        // ----- 5. First products page (only for "products" display mode) -----
+        // ----- 5. First products page — folds the category page's 2nd request
+        // into this one. familyId → first page of that category; display=products
+        // → first page of the all-products home. Favourites are per-customer, so
+        // the shared (favourite-less) shape is served here. --------------------
         let products = null;
-        if ((req.query?.display || '') === 'products') {
-            const limit = Math.max(0, parseInt(req.query?.limit, 10) || 25);
-            const offset = Math.max(0, parseInt(req.query?.offset, 10) || 0);
+        const familyIdQ = parseInt(req.query?.familyId, 10);
+        const wantAll = (req.query?.display || '') === 'products';
+        if (wantAll || familyIdQ > 0) {
+            // Mirror the client's getSettings()+category clamp so the preloaded
+            // page lines up with the offsets the client requests for page 2+.
+            let ps = Number(settings && settings.pageSize);
+            ps = (Number.isFinite(ps) && ps > 0) ? Math.min(200, Math.floor(ps)) : 25;
+            const size = familyIdQ > 0 ? Math.max(12, ps) : ps;
             try {
                 const catalog = await getCatalog(client, storeId);
-                // Favourites are per-customer; the home "products" grid does not
-                // mark them, so we serve the shared (favourite-less) shape here.
-                const total = catalog.length;
-                const paged = catalog.slice(offset, offset + limit)
-                    .map(p => ({ ...p, isFavorite: false }));
-                products = { products: paged, total };
-            } catch { products = { products: [], total: 0 }; }
+                let list = catalog;
+                if (familyIdQ > 0) {
+                    const fam = Array.isArray(families) ? families.find(f => f.id === familyIdQ) : null;
+                    list = fam ? catalog.filter(p => p.family === fam.name) : [];
+                }
+                const total = list.length;
+                const paged = list.slice(0, size).map(p => ({ ...p, isFavorite: false }));
+                products = familyIdQ > 0
+                    ? { products: paged, total, familyId: familyIdQ, size }
+                    : { products: paged, total };
+            } catch {
+                products = familyIdQ > 0
+                    ? { products: [], total: 0, familyId: familyIdQ, size }
+                    : { products: [], total: 0 };
+            }
         }
 
         res.status(200).json({ tenant: tenantOut, settings, access: true, store, families, products });
