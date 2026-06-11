@@ -131,7 +131,16 @@ export default async function handler(req, res) {
                 name: String(it.name || ''),
                 price: Number(it.price || 0),
                 quantity: Number(it.quantity || 0),
-                unitType: it.unitType || 'قطعة'
+                unitType: it.unitType || 'قطعة',
+                // تفصيل الطلب بالأحجام (إن وُجد): الوحدة + كل حجم.
+                unitQty: Number(it.unitQty) || 0,
+                sizes: Array.isArray(it.sizes)
+                    ? it.sizes.map(s => ({
+                        name: String(s.name || ''),
+                        capacity: Number(s.capacity) || 0,
+                        qty: Number(s.qty) || 0
+                    })).filter(s => s.name && s.qty > 0)
+                    : []
             })).filter(it => it.name && it.quantity > 0);
 
             if (cleanItems.length === 0) {

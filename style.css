@@ -1490,3 +1490,66 @@ a.product-link {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===== نافذة الطلب بالأحجام ===== */
+.size-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 16px;
+}
+.size-modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px;
+    width: 100%;
+    max-width: 380px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+.size-modal h3 { margin: 0 0 10px; font-size: 17px; color: var(--text-dark); }
+.size-total {
+    background: #e8f7ee;
+    border: 1px solid #b6e3c6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+.size-total b { color: #1b7a43; font-size: 18px; }
+.size-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.size-row > span:first-child { flex: 1; font-size: 13.5px; }
+.size-qty {
+    width: 70px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 700;
+    font-family: inherit;
+}
+.sz-sub { color: #1b7a43; font-weight: 700; font-size: 13px; min-width: 70px; text-align: left; }
+.size-actions { display: flex; gap: 10px; margin-top: 16px; }
+.size-actions button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+}
+.size-cancel { background: #eee; color: #555; }
+.size-ok { background: var(--primary); color: #fff; }

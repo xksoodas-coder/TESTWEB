@@ -883,3 +883,100 @@
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ===== شريط الإدارة الجانبي (زر ثلاث خطوط) ===== */
+.admin-hamburger {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+.admin-hamburger.floating {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 1004;
+    background: rgba(0, 0, 0, 0.08);
+}
+.admin-hamburger span {
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+    display: block;
+}
+.admin-header .admin-hamburger { color: #fff; }
+
+.admin-nav-hidden { display: none !important; }
+
+.admin-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    z-index: 1003;
+}
+.admin-sidebar-overlay.show { opacity: 1; visibility: visible; }
+
+.admin-sidebar {
+    position: fixed;
+    top: 0;
+    right: -300px;
+    width: 270px;
+    height: 100%;
+    background: #fff;
+    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.18);
+    z-index: 1004;
+    transition: right 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 14px;
+    box-sizing: border-box;
+}
+.admin-sidebar.open { right: 0; }
+.admin-sidebar-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 12px;
+}
+.admin-sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+.admin-sidebar-nav a {
+    padding: 13px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #333;
+    font-weight: 700;
+    font-size: 15px;
+}
+.admin-sidebar-nav a:hover { background: #f3f3f5; }
+.admin-sidebar-nav a.active { background: var(--primary, #6A1B9A); color: #fff; }
+.admin-sidebar-foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+}
+.admin-sidebar-foot a {
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #555;
+    font-size: 13px;
+}
+.admin-sidebar-foot a:hover { background: #f3f3f5; }

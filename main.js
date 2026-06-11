@@ -5,6 +5,12 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
     applyThemeAndAnnouncement();
+
+    // One request resolves tenant + settings + store + categories and primes
+    // the caches the steps below read, collapsing the old sequential waterfall.
+    // Best-effort: if it fails, each step falls back to its own endpoint.
+    await BWS.bootstrap();
+
     if (!(await ensureTenant())) return;
 
     // Pull settings first (public-capable) so we know the order mode before
@@ -762,8 +768,19 @@ function wireProductCards(grid, products, favoritesMode) {
         // Add to cart (the small cart-icon button; the big button is an order link).
         const addBtn = card.querySelector('.cart-icon-btn');
         if (addBtn) {
-            addBtn.addEventListener('click', () => {
+            addBtn.addEventListener('click', async () => {
                 const product = productByUuid.get(uuid);
+                // الطلب بالأحجام مفعَّل + للمنتج أحجام → نافذة اختيار الأحجام.
+                if (BWS.sizeOrderingEnabled() && Array.isArray(product?.sizes) && product.sizes.length) {
+                    const res = await showSizeOrderDialog(product);
+                    if (!res) return;
+                    if (BWS.addToCartSized(product, res.total, res.unitQty, res.sizes)) {
+                        updateCartBadge();
+                        if (document.getElementById('cartSidebar')?.classList.contains('open')) renderCartSidebar();
+                        showToast('تمت إضافة المنتج إلى السلة');
+                    }
+                    return;
+                }
                 if (BWS.addToCart(product, 1)) {
                     updateCartBadge();
                     if (document.getElementById('cartSidebar')?.classList.contains('open')) {
@@ -1044,6 +1061,78 @@ function populateCartBaladiyas(wilSel, balSel) {
             return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
         }).join('');
     balSel.disabled = communes.length === 0;
+}
+
+// ===== نافذة الطلب بالأحجام =====
+// تُرجع { total, unitQty, sizes:[{name,capacity,qty}] } أو null عند الإلغاء.
+function showSizeOrderDialog(product) {
+    return new Promise((resolve) => {
+        const cap = Number(product.quantity) || 0;
+        const sizes = (product.sizes || []).map(s => ({
+            name: s.name, capacity: Number(s.capacity) || 0, qty: 0
+        }));
+        let unitQty = 1;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'size-modal-overlay';
+        overlay.innerHTML =
+            '<div class="size-modal" dir="rtl">' +
+            `<h3>${escapeHtml(product.name)}</h3>` +
+            '<div class="size-total">الكمية الإجمالية: <b id="szTotal">1</b></div>' +
+            '<div class="size-row"><span>الكمية بالوحدة</span>' +
+            '<input type="number" id="szUnit" min="0" value="1" class="size-qty"></div>' +
+            '<div id="szSizes"></div>' +
+            '<div class="size-actions">' +
+            '<button type="button" class="size-cancel">إلغاء</button>' +
+            '<button type="button" class="size-ok">إضافة للسلة</button>' +
+            '</div></div>';
+        document.body.appendChild(overlay);
+
+        const szSizes = overlay.querySelector('#szSizes');
+        szSizes.innerHTML = sizes.map((s, i) =>
+            '<div class="size-row">' +
+            `<span>${escapeHtml(s.name)} (سعة ${s.capacity})</span>` +
+            `<input type="number" min="0" value="0" data-i="${i}" class="size-qty sz-size">` +
+            `<span class="sz-sub" data-i="${i}">× ${s.capacity} = 0</span>` +
+            '</div>').join('');
+
+        const recompute = () => {
+            let total = unitQty;
+            sizes.forEach((s, i) => {
+                total += s.qty * s.capacity;
+                const sub = szSizes.querySelector(`.sz-sub[data-i="${i}"]`);
+                if (sub) sub.textContent = `× ${s.capacity} = ${s.qty * s.capacity}`;
+            });
+            overlay.querySelector('#szTotal').textContent = String(total);
+        };
+
+        overlay.querySelector('#szUnit').addEventListener('input', (e) => {
+            unitQty = Math.max(0, Number(e.target.value) || 0);
+            recompute();
+        });
+        szSizes.querySelectorAll('.sz-size').forEach((inp) => {
+            inp.addEventListener('input', (e) => {
+                const i = Number(e.target.dataset.i);
+                sizes[i].qty = Math.max(0, Number(e.target.value) || 0);
+                recompute();
+            });
+        });
+
+        const close = (val) => { overlay.remove(); resolve(val); };
+        overlay.querySelector('.size-cancel').addEventListener('click', () => close(null));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+        overlay.querySelector('.size-ok').addEventListener('click', () => {
+            let total = unitQty;
+            sizes.forEach((s) => total += s.qty * s.capacity);
+            if (total <= 0) { showToast('أدخل كمية'); return; }
+            if (total > cap) { showToast('الكمية تتجاوز المتوفر (' + cap + ')'); return; }
+            const chosen = sizes.filter(s => s.qty > 0)
+                .map(s => ({ name: s.name, capacity: s.capacity, qty: s.qty }));
+            close({ total, unitQty, sizes: chosen });
+        });
+
+        recompute();
+    });
 }
 
 // ===== Contact Form =====

@@ -19,6 +19,9 @@ const BWS = (function () {
     const LS_TENANT = 'bws_tenant';          // resolved tenant {slug, storeId, name, active}
 
     let _tenantInfo = null;
+    // Set once per page load after /api/bootstrap primes the caches below, so
+    // the individual fetchers (settings/tenant/store/families) skip re-fetching.
+    let _bootstrapApplied = false;
 
     // The storefront's tenant is derived from the link: a custom domain / a
     // subdomain (server reads Host) or, on the platform/preview host, a
@@ -57,7 +60,10 @@ const BWS = (function () {
         guestPriceTier: 1,
         // أسعار التوصيل: office = سعر المكتب لكل ولاية (مفتاح = معرّف الولاية)،
         // home = سعر المنزل لكل بلدية (مفتاح = "wilayaId|labelالبلدية").
-        delivery: { office: {}, home: {} }
+        delivery: { office: {}, home: {} },
+        // صلاحية الطلب بالأحجام (لكل فئة): العابر / المسجَّل.
+        sizeOrderGuest: false,
+        sizeOrderRegistered: false
     };
 
     // In-memory cache, refilled per page load.
@@ -121,7 +127,9 @@ const BWS = (function () {
                     office: (raw.delivery.office && typeof raw.delivery.office === 'object') ? raw.delivery.office : {},
                     home: (raw.delivery.home && typeof raw.delivery.home === 'object') ? raw.delivery.home : {}
                   }
-                : { office: {}, home: {} }
+                : { office: {}, home: {} },
+            sizeOrderGuest: raw.sizeOrderGuest === true,
+            sizeOrderRegistered: raw.sizeOrderRegistered === true
         };
     }
     function setSettings(next) {
@@ -200,6 +208,8 @@ const BWS = (function () {
         // Pull the store's settings from the server and cache them locally so
         // applyThemeAndAnnouncement() (sync) reflects them on the next render.
         async fetchSiteSettings({ adminAuth = false } = {}) {
+            // /api/bootstrap already pulled fresh settings this page load.
+            if (_bootstrapApplied && !adminAuth) return getSettings();
             try {
                 const data = await apiFetch('/api/site-settings', { method: 'GET', adminAuth });
                 if (data && data.settings && typeof data.settings === 'object') {
@@ -207,6 +217,49 @@ const BWS = (function () {
                 }
             } catch { /* keep local cache */ }
             return getSettings();
+        },
+
+        // ----- one-shot storefront entry (collapses the load waterfall) -----
+        // Fetches tenant + settings + store + categories in a single request and
+        // primes the in-memory / localStorage caches the other fetchers read, so
+        // ensureTenant()/refreshSiteSettings()/renderCategoriesGrid()/branding all
+        // resolve without further network. Best-effort: on any failure the caller
+        // falls back to the per-endpoint path. Returns the raw payload or null.
+        async bootstrap() {
+            let data;
+            try { data = await apiFetch('/api/bootstrap', { method: 'GET' }); }
+            catch { return null; }
+            if (!data) return null;
+
+            if (data.tenant) {
+                _tenantInfo = data.tenant;
+                if (data.tenant.found && data.tenant.slug) {
+                    writeJSON(LS_TENANT, {
+                        slug: data.tenant.slug, storeId: data.tenant.storeId,
+                        name: data.tenant.name, active: data.tenant.active
+                    });
+                }
+            }
+            if (data.settings && typeof data.settings === 'object') {
+                writeJSON(LS_SETTINGS, data.settings);
+            }
+            if (data.store && typeof data.store === 'object') {
+                _storeInfoCache = {
+                    name: data.store.name || '',
+                    activity: data.store.activity || '',
+                    address: data.store.address || '',
+                    phone1: data.store.phone1 || '',
+                    phone2: data.store.phone2 || '',
+                    email: data.store.email || '',
+                    rib: data.store.rib || '',
+                    logoUrl: data.store.logoUrl || ''
+                };
+            }
+            if (Array.isArray(data.families)) {
+                _familiesCache = data.families;
+            }
+            _bootstrapApplied = true;
+            return data;
         },
         // Admin-only: persist the store's settings on the server.
         async saveSiteSettings(settings) {
@@ -430,6 +483,34 @@ const BWS = (function () {
             return true;
         },
 
+        // إضافة للسلة مع تفصيل الأحجام (طلب بالأحجام). يُنشئ سطراً مستقلاً يحمل
+        // الكمية الإجمالية + تفصيل (الوحدة + كل حجم).
+        addToCartSized(product, totalQty, unitQty, sizes) {
+            if (!product || !product.uuid || !(totalQty > 0)) return false;
+            const cart = getCart();
+            const prices = this.productTierPrices(product);
+            const tier = this.isPricePerProduct()
+                ? this.firstAllowedTier()
+                : this.getGlobalTier();
+            cart.push({
+                uuid: product.uuid,
+                id: product.id ?? null,
+                name: product.name,
+                family: product.family,
+                prices,
+                tier,
+                price: this.priceForTier(prices, tier),
+                unitType: product.unitType || 'قطعة',
+                imageUrl: product.imageUrl || '',
+                maxQty: Number(product.quantity),
+                qty: totalQty,
+                unitQty: Number(unitQty) || 0,
+                sizes: Array.isArray(sizes) ? sizes : []
+            });
+            setCart(cart);
+            return true;
+        },
+
         // Switch a cart item to another allowed price tier (per-product mode).
         setCartItemTier(uuid, tier) {
             const cart = getCart();
@@ -529,7 +610,9 @@ const BWS = (function () {
                         items: clean.map(it => ({
                             uuid: it.uuid, id: it.id ?? null, name: it.name,
                             price: Number(it.price || 0), quantity: Number(it.quantity),
-                            unitType: it.unitType || 'قطعة'
+                            unitType: it.unitType || 'قطعة',
+                            unitQty: Number(it.unitQty) || 0,
+                            sizes: Array.isArray(it.sizes) ? it.sizes : []
                         })),
                         name, phone, wilaya, baladiya, deliveryType, notes,
                         delivery: Number(delivery) || 0
@@ -557,7 +640,9 @@ const BWS = (function () {
                             name: it.name,
                             price: it.price,
                             quantity: it.qty,
-                            unitType: it.unitType
+                            unitType: it.unitType,
+                            unitQty: Number(it.unitQty) || 0,
+                            sizes: Array.isArray(it.sizes) ? it.sizes : []
                         })),
                         notes,
                         name,
@@ -636,6 +721,12 @@ const BWS = (function () {
             return this.priceForTier(prices, tier);
         },
         tierLabel(t) { return 'سعر ' + t; },
+
+        // هل الطلب بالأحجام مفعَّل للزائر الحالي؟ (حسب فئته + إعداد الأدمين)
+        sizeOrderingEnabled() {
+            const s = getSettings();
+            return getCustomerSession() ? !!s.sizeOrderRegistered : !!s.sizeOrderGuest;
+        },
 
         // ----- سعر التوصيل -----
         // office: حسب الولاية (المعرّف). home: حسب البلدية ("wilayaId|label").

@@ -33,7 +33,7 @@
 
         <form id="settingsForm">
             <!-- Theme colors -->
-            <div class="admin-card">
+            <div class="admin-card" id="appearanceCard">
                 <h2>ألوان الموقع</h2>
                 <p class="muted" style="margin-bottom:18px;font-size:13px">
                     اختر الألوان التي تظهر في الشريط العلوي، الأزرار، وعناصر التمييز.
@@ -315,6 +315,23 @@
                 </div>
 
                 <div id="delList" style="font-size:13px"></div>
+            </div>
+
+            <!-- Size ordering -->
+            <div class="admin-card">
+                <h2>الطلب بالأحجام</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    عند التفعيل يستطيع الزبون عند الطلب اختيار الكمية بالوحدة أو حسب أحجام
+                    المنتج (وتُعرض سعة كل حجم). فعّلها لكل فئة على حدة.
+                </p>
+                <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
+                    <input type="checkbox" id="sizeOrderGuest">
+                    <span>تفعيل للزبون العابر (بدون تسجيل دخول)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="sizeOrderRegistered">
+                    <span>تفعيل للزبون المسجَّل</span>
+                </label>
             </div>
 
             <div class="form-actions">

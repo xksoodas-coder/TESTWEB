@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     wireLogout();
+    wireAdminShell();
 
     try {
         if (document.getElementById('statTotalCategories')) {
@@ -35,6 +36,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToastAdmin(err.message || 'خطأ في الاتصال بالخادم');
     }
 });
+
+// ===== شريط جانبي للإدارة (زر ثلاث خطوط) =====
+function wireAdminShell() {
+    if (document.getElementById('adminSidebar')) return;
+    const page = (location.pathname.split('/').pop() || '').toLowerCase();
+
+    const burger = document.createElement('button');
+    burger.id = 'adminHamburger';
+    burger.className = 'admin-hamburger';
+    burger.setAttribute('aria-label', 'القائمة');
+    burger.innerHTML = '<span></span><span></span><span></span>';
+    const headerC = document.querySelector('.admin-header-container');
+    if (headerC) headerC.prepend(burger);
+    else { burger.classList.add('floating'); document.body.appendChild(burger); }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'admin-sidebar-overlay';
+    document.body.appendChild(overlay);
+
+    const items = [
+        { label: '📦 المنتجات', href: 'admin-descriptions.html', match: 'admin-descriptions.html' },
+        { label: '🗂️ التصنيفات', href: 'admin-categories.html', match: 'admin-categories.html' },
+        { label: '⚙️ الإعدادات', href: 'admin-settings.html', match: 'admin-settings.html' },
+        { label: '🎨 المظاهر', href: 'admin-settings.html#appearanceCard', match: '' }
+    ];
+    const sidebar = document.createElement('aside');
+    sidebar.className = 'admin-sidebar';
+    sidebar.id = 'adminSidebar';
+    sidebar.innerHTML =
+        '<div class="admin-sidebar-head"><div class="logo-circle small"><span>BS</span></div><span>لوحة الإدارة</span></div>' +
+        '<nav class="admin-sidebar-nav">' +
+        items.map(it => `<a href="${it.href}" class="${it.match === page ? 'active' : ''}">${it.label}</a>`).join('') +
+        '</nav>' +
+        '<div class="admin-sidebar-foot">' +
+        '<a href="admin-dashboard.html">🏠 لوحة التحكم</a>' +
+        '<a href="index.html" target="_blank">🛍️ عرض المتجر</a>' +
+        '</div>';
+    document.body.appendChild(sidebar);
+
+    // إخفاء الشريط العلوي القديم (استبدلناه بالجانبي).
+    document.querySelector('.admin-nav')?.classList.add('admin-nav-hidden');
+
+    const open = () => { sidebar.classList.add('open'); overlay.classList.add('show'); };
+    const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('show'); };
+    burger.addEventListener('click', () => sidebar.classList.contains('open') ? close() : open());
+    overlay.addEventListener('click', close);
+    sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
+}
 
 // ===== Login =====
 async function wireLogin() {
@@ -329,6 +378,8 @@ function wireSettingsPage() {
         fpr5: document.getElementById('fpr5'),
         fpr6: document.getElementById('fpr6'),
         fpr7: document.getElementById('fpr7'),
+        sizeOrderGuest: document.getElementById('sizeOrderGuest'),
+        sizeOrderRegistered: document.getElementById('sizeOrderRegistered'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
@@ -336,6 +387,7 @@ function wireSettingsPage() {
 
     // أسعار التوصيل: office[wilayaId]=price ، home["wilayaId|labelالبلدية"]=price.
     let _delivery = { office: {}, home: {} };
+    let _persistDelivery = async () => {}; // تُسنَد لاحقاً (حفظ فوري على الخادم).
 
     function syncPageSizeVisibility() {
         if (!fields.pageSizeWrap) return;
@@ -392,6 +444,8 @@ function wireSettingsPage() {
               }
             : { office: {}, home: {} };
         renderDeliveryList();
+        if (fields.sizeOrderGuest) fields.sizeOrderGuest.checked = s.sizeOrderGuest === true;
+        if (fields.sizeOrderRegistered) fields.sizeOrderRegistered.checked = s.sizeOrderRegistered === true;
         syncPageSizeVisibility();
         updatePreview();
     }
@@ -431,7 +485,7 @@ function wireSettingsPage() {
             _delivery.office[wid] = price;
             document.getElementById('delOfficePrice').value = '';
             renderDeliveryList();
-            showToastAdmin('أُضيف — اضغط «حفظ الإعدادات» للحفظ النهائي');
+            _persistDelivery();
         });
 
         document.getElementById('delHomeSave').addEventListener('click', () => {
@@ -443,7 +497,7 @@ function wireSettingsPage() {
             _delivery.home[`${wid}|${label}`] = price;
             document.getElementById('delHomePrice').value = '';
             renderDeliveryList();
-            showToastAdmin('أُضيف — اضغط «حفظ الإعدادات» للحفظ النهائي');
+            _persistDelivery();
         });
     }
 
@@ -481,6 +535,7 @@ function wireSettingsPage() {
                 if (kind === 'office') delete _delivery.office[key];
                 else delete _delivery.home[key];
                 renderDeliveryList();
+                _persistDelivery();
             });
         });
     }
@@ -496,13 +551,13 @@ function wireSettingsPage() {
     syncColorToHex(fields.primaryLight, fields.primaryLightHex);
     setupDeliveryUI();
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // يجمع كل إعدادات الموقع من النموذج (تُستعمل في الحفظ اليدوي وفي حفظ أسعار
+    // التوصيل الفوري).
+    function collectSettings() {
         let pageSize = parseInt(fields.pageSize?.value, 10);
         if (!Number.isFinite(pageSize) || pageSize < 1) pageSize = 25;
         pageSize = Math.min(200, pageSize);
-
-        const settings = {
+        return {
             theme: {
                 primary: fields.primary.value,
                 primaryDark: fields.primaryDark.value,
@@ -515,8 +570,25 @@ function wireSettingsPage() {
             orderMode: fields.orderModeDirect.checked ? 'direct' : 'cart',
             productsPerRow: Number(document.querySelector('input[name="productsPerRow"]:checked')?.value || 7),
             familiesPerRow: Number(document.querySelector('input[name="familiesPerRow"]:checked')?.value || 4),
-            delivery: _delivery
+            delivery: _delivery,
+            sizeOrderGuest: !!fields.sizeOrderGuest?.checked,
+            sizeOrderRegistered: !!fields.sizeOrderRegistered?.checked
         };
+    }
+
+    // حفظ أسعار التوصيل فوراً على الخادم (دون انتظار زر «حفظ الإعدادات»).
+    _persistDelivery = async () => {
+        try {
+            await BWS.saveSiteSettings(collectSettings());
+            showToastAdmin('تم حفظ أسعار التوصيل ✅');
+        } catch (err) {
+            showToastAdmin(err.message || 'تعذّر الحفظ');
+        }
+    };
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const settings = collectSettings();
 
         const btn = form.querySelector('button[type="submit"]');
         const orig = btn.textContent;

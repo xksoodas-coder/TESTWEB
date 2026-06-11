@@ -1,76 +1,17 @@
 import { getTursoClient } from './_lib/turso.js';
 import { resolveReadAccess } from './_lib/access.js';
-import { productImageUrl } from './_lib/r2.js';
+import { getCatalog } from './_lib/catalog.js';
 
 /**
- * Reduce the Products changelog the same way the desktop / mobile apps do.
+ * GET /api/products?family=<name>&favorites=1&limit=&offset=
+ * Auth: Bearer <session token> (logged-in customer) OR a guest on a
+ * 'direct'-mode (public) store — storeId comes from the token/tenant.
  *
- * Events (ordered by timestamp):
- *   INSERT / UPDATE  → carry the FULL product state, including the absolute
- *                      totalQuantity at that moment.
- *   QUANTITY_DELTA   → carry only { totalQuantityDelta }, applied on top of
- *                      the latest full state (CRDT for concurrent sales).
- *   DELETE           → remove the product.
- *
- * Naively taking "the latest event" breaks because a QUANTITY_DELTA after a
- * sale has no name/family — the product would vanish. So we keep the latest
- * full payload and only add deltas that happened AFTER it (an UPDATE already
- * re-snapshots the absolute quantity, so earlier deltas are baked in).
- */
-function reduceProducts(rows) {
-    const state = new Map(); // record_uuid → {full, fullTs, deltaAfter, lastTs, deleted}
-
-    for (const row of rows) {
-        const uuid = row.record_uuid;
-        const op = row.operation;
-        const ts = row.timestamp;
-        let entry = state.get(uuid);
-        if (!entry) {
-            entry = { full: null, fullTs: '', deltaAfter: 0, lastTs: '', deleted: false };
-            state.set(uuid, entry);
-        }
-
-        let data = null;
-        try { data = JSON.parse(row.json_payload); } catch { /* ignore */ }
-
-        if (op === 'DELETE') {
-            if (ts >= entry.lastTs) entry.deleted = true;
-        } else if (op === 'QUANTITY_DELTA') {
-            // Only matters if it happened after the latest full snapshot.
-            if (data && ts > entry.fullTs) {
-                entry.deltaAfter += Number(data.totalQuantityDelta || 0);
-            }
-        } else {
-            // INSERT / UPDATE — a fresh absolute snapshot.
-            if (data && ts >= entry.fullTs) {
-                entry.full = data;
-                entry.fullTs = ts;
-                entry.deltaAfter = 0;     // snapshot already includes prior deltas
-                entry.deleted = false;    // a new snapshot revives the record
-            }
-        }
-        if (ts >= entry.lastTs) entry.lastTs = ts;
-    }
-
-    const out = new Map();
-    for (const [uuid, e] of state) {
-        if (e.deleted || !e.full) continue;
-        out.set(uuid, {
-            data: e.full,
-            quantity: Number(e.full.totalQuantity ?? 0) + e.deltaAfter
-        });
-    }
-    return out;
-}
-
-/**
- * GET /api/products?family=<name>&favorites=1
- * Auth: Bearer <session token> (required — storeId comes from the token)
- *
- * Walks turso_changelog for table_name='Products', reduces to the latest
- * payload per record_uuid, and returns rows where the camelCase `family`
- * field matches the requested name. Each product carries an `isFavorite`
- * flag; with favorites=1 only the customer's favourites are returned.
+ * The catalogue itself is served from a per-store materialised snapshot
+ * (see _lib/catalog.js) instead of reducing the whole changelog on every
+ * request. Only the per-customer `isFavorite` flag and the requested
+ * family/favorites/pagination filters are applied here, so the heavy work
+ * happens at most once per snapshot TTL.
  */
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -110,72 +51,15 @@ export default async function handler(req, res) {
             } catch { /* table missing → no favourites yet */ }
         }
 
-        const result = await client.execute({
-            sql: `SELECT record_uuid, operation, json_payload, timestamp
-                  FROM turso_changelog
-                  WHERE store_id = ? AND table_name = 'Products'
-                  ORDER BY timestamp ASC`,
-            args: [storeId]
-        });
-
-        // Extra prices (4..7) live in a standalone table keyed by product uuid.
-        let extraPrices = {};
-        try {
-            const ep = await client.execute({
-                sql: `SELECT json_payload FROM turso_product_extra_prices WHERE store_id = ? LIMIT 1`,
-                args: [storeId]
-            });
-            if (ep.rows.length && ep.rows[0].json_payload) {
-                extraPrices = JSON.parse(ep.rows[0].json_payload) || {};
-            }
-        } catch { /* table may not exist yet */ }
-
-        const latest = reduceProducts(result.rows);
+        // Whole catalogue (shaped, snapshot-cached) → apply the request filters.
+        const catalog = await getCatalog(client, storeId);
         const products = [];
-        for (const [recordUuid, entry] of latest) {
-            const data = entry.data;
-            // Hidden products never appear on the storefront (default = visible).
-            if (data.webVisible === false) continue;
-            const family = (data.family || '').toString().trim();
-            if (familyFilter && family !== familyFilter) continue;
-
-            const isFavorite = favSet.has(recordUuid);
+        for (const p of catalog) {
+            if (familyFilter && p.family !== familyFilter) continue;
+            const isFavorite = favSet.has(p.uuid);
             if (favoritesOnly && !isFavorite) continue;
-
-            const totalQty = Number(entry.quantity ?? 0);
-            const imageVersion = data.imageVersion ?? '';
-            const price1 = Number(data.sellPrice ?? 0);
-            const price2 = Number(data.wholesalePrice ?? 0);
-            const price3 = Number(data.price3 ?? 0);
-            const ex = extraPrices[recordUuid] || [];
-            const price4 = Number(ex[0] ?? 0);
-            const price5 = Number(ex[1] ?? 0);
-            const price6 = Number(ex[2] ?? 0);
-            const price7 = Number(ex[3] ?? 0);
-            products.push({
-                uuid: recordUuid,
-                id: data.id ?? null,
-                name: data.name ?? '',
-                family,
-                price: price1,
-                price1,
-                price2,
-                price3,
-                price4,
-                price5,
-                price6,
-                price7,
-                quantity: totalQty,
-                available: totalQty > 0,
-                unitType: data.unitType ?? 'قطعة',
-                imageVersion,
-                imageUrl: imageVersion ? productImageUrl(recordUuid, imageVersion) : '',
-                barcode: data.barcode ?? '',
-                isFavorite
-            });
+            products.push(isFavorite ? { ...p, isFavorite } : { ...p, isFavorite: false });
         }
-
-        products.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
         const total = products.length;
         const paged = limit > 0 ? products.slice(offset, offset + limit) : products;
