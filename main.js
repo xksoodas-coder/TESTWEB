@@ -960,26 +960,29 @@ async function renderFamilyPaged(family, grid, emptyState, localItems = null) {
 function renderProductCard(p) {
     const available = p.available && p.quantity > 0;
     const fav = p.isFavorite ? ' active' : '';
-    const loggedIn = !!BWS.getCustomerSession();
 
-    // Every product now shows BOTH actions, in every mode:
-    //   • a big, wide "اضغط هنا للطلب" button → the order form,
-    //   • a small cart-icon button → add to cart.
-    // Clicking the product (image/name) opens the same order form.
+    // Which buttons show is admin-controlled PER audience (guest vs registered),
+    // resolved from the already-loaded settings — no extra request, applied live.
+    const audience = BWS.getCustomerSession() ? 'registered' : 'guest';
+    const vis = BWS.buttonVisibility(audience);
+
     const orderUrl = withTenant('order.html?product=' + encodeURIComponent(p.uuid));
-    const orderBtn = available
-        ? `<a class="add-cart-btn order-btn" href="${orderUrl}">اضغط هنا للطلب</a>`
-        : `<span class="add-cart-btn order-btn unavailable-btn">غير متاح</span>`;
-    const cartIconBtn = available
+    const orderBtn = vis.order
+        ? (available
+            ? `<a class="add-cart-btn order-btn" href="${orderUrl}">اضغط هنا للطلب</a>`
+            : `<span class="add-cart-btn order-btn unavailable-btn">غير متاح</span>`)
+        : '';
+    const cartIconBtn = (vis.cart && available)
         ? `<button class="cart-icon-btn" type="button" aria-label="إضافة إلى السلة" title="إضافة إلى السلة">${CART_SVG}</button>`
         : '';
-    // Favourites belong to a logged-in customer only.
-    const favBtn = loggedIn
+    // Heart overlays the image (top-left corner); shown per the audience setting.
+    const favBtn = vis.fav
         ? `<button class="fav-btn${fav}" type="button" aria-label="مفضلة">♥</button>`
         : '';
 
     return `
         <div class="product-card${available ? '' : ' unavailable'}" data-uuid="${escapeHtml(p.uuid)}">
+            ${favBtn}
             <a class="product-link" href="${orderUrl}">
                 ${renderDeferredProductImage(p.imageUrl)}
                 <div class="product-name">${escapeHtml(p.name)}</div>
@@ -989,7 +992,7 @@ function renderProductCard(p) {
                 ${available ? 'متاح' : 'غير متاح'}
             </div>
             <div class="product-actions">
-                ${orderBtn}${cartIconBtn}${favBtn}
+                ${orderBtn}${cartIconBtn}
             </div>
         </div>
     `;
@@ -1079,10 +1082,19 @@ function wireProductCards(grid, products, favoritesMode) {
             });
         }
 
-        // Favorite toggle
+        // Favorite toggle (heart overlay on the image)
         const favBtn = card.querySelector('.fav-btn');
         if (favBtn) {
-            favBtn.addEventListener('click', async () => {
+            favBtn.addEventListener('click', async (e) => {
+                // The heart sits over the product link → don't navigate.
+                e.preventDefault();
+                e.stopPropagation();
+                // Favourites need an account; a guest is sent to login instead.
+                if (!BWS.getCustomerSession()) {
+                    showToast('سجّل الدخول لإضافة المنتجات إلى المفضلة');
+                    setTimeout(() => { window.location.href = withTenant('login.html'); }, 1100);
+                    return;
+                }
                 const product = productByUuid.get(uuid);
                 const willActivate = !favBtn.classList.contains('active');
                 favBtn.classList.toggle('active', willActivate);

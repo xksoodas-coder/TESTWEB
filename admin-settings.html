@@ -331,6 +331,42 @@
                 </label>
             </div>
 
+            <!-- Product card buttons per audience -->
+            <div class="admin-card">
+                <h2>أزرار بطاقة المنتج</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    تحكّم في الأزرار الظاهرة على بطاقة المنتج لكل فئة: «اضغط للطلب»،
+                    أيقونة السلة، وزر القلب (المفضلة). يُطبَّق فورًا حسب حالة الزائر
+                    (مسجَّل الدخول أو عابر) — حتى لو كان المتجر متاحًا للجميع.
+                </p>
+                <div style="display:flex;gap:32px;flex-wrap:wrap">
+                    <div>
+                        <strong style="font-size:13px">الزبون العابر (غير مسجَّل)</strong>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnGuestOrder"><span>زر «اضغط للطلب»</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnGuestCart"><span>زر السلة</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnGuestFav"><span>زر القلب</span>
+                        </label>
+                    </div>
+                    <div>
+                        <strong style="font-size:13px">الزبون المسجَّل</strong>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnRegOrder"><span>زر «اضغط للطلب»</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnRegCart"><span>زر السلة</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer">
+                            <input type="checkbox" id="btnRegFav"><span>زر القلب</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Size ordering -->
             <div class="admin-card">
                 <h2>الطلب بالأحجام</h2>

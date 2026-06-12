@@ -412,12 +412,13 @@ function renderOrderPage() {
     prefillFromSession();
     updateSummary();
 
-    // الزبون المسجَّل: أخفِ الولاية/البلدية/التوصيل (لا توصيل له، يرى أسعاره فقط).
+    // الزبون المسجَّل: لا تُحتسب له رسوم توصيل → أخفِ نوع التوصيل وسطر سعر التوصيل،
+    // لكن أبقِ اختيار الولاية ظاهراً (ليعرف المتجر مكان التسليم). الولاية اختيارية له.
     if (BWS.getCustomerSession()) {
         const wil = document.getElementById('ofWilaya');
-        if (wil) { const r = wil.closest('.of-row'); if (r) r.style.display = 'none'; wil.required = false; }
+        if (wil) wil.required = false;
         const del = document.getElementById('ofDelivery');
-        if (del) del.style.display = 'none';
+        if (del) { const f = del.closest('.of-field'); if (f) f.style.display = 'none'; }
         const dr = document.getElementById('summaryDelivery');
         if (dr) { const row = dr.closest('.summary-row'); if (row) row.style.display = 'none'; }
     }

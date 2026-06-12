@@ -69,7 +69,13 @@ const BWS = (function () {
         sizeOrderRegistered: false,
         // إظهار المنتجات التي نفد مخزونها (≤0) كـ«غير متاح». عند الإطفاء تُخفى كليًا
         // فلا يُعرض ولا يُرسَل سوى المتوفّر (أخفّ وأذكى). الافتراضي: إظهار.
-        showOutOfStock: true
+        showOutOfStock: true,
+        // أزرار بطاقة المنتج المعروضة لكل فئة زبون: العابر (guest) والمسجَّل
+        // (registered). order = «اضغط للطلب»، cart = أيقونة السلة، fav = القلب.
+        productButtons: {
+            guest:      { order: true, cart: true, fav: false },
+            registered: { order: true, cart: true, fav: true }
+        }
     };
 
     // In-memory cache, refilled per page load.
@@ -122,6 +128,19 @@ const BWS = (function () {
         return out;
     }
 
+    // Normalise the per-audience product-button visibility, filling any missing
+    // flag from the defaults (so old saved settings keep working).
+    function parseProductButtons(raw) {
+        const d = DEFAULT_SETTINGS.productButtons;
+        const pick = (o, def) => ({
+            order: (o && typeof o.order === 'boolean') ? o.order : def.order,
+            cart:  (o && typeof o.cart  === 'boolean') ? o.cart  : def.cart,
+            fav:   (o && typeof o.fav   === 'boolean') ? o.fav   : def.fav
+        });
+        raw = (raw && typeof raw === 'object') ? raw : {};
+        return { guest: pick(raw.guest, d.guest), registered: pick(raw.registered, d.registered) };
+    }
+
     // ----- settings (admin) -----
     function getSettings() {
         const raw = readJSON(LS_SETTINGS, null);
@@ -150,7 +169,8 @@ const BWS = (function () {
                 : { office: {}, home: {} },
             sizeOrderGuest: raw.sizeOrderGuest === true,
             sizeOrderRegistered: raw.sizeOrderRegistered === true,
-            showOutOfStock: raw.showOutOfStock !== false
+            showOutOfStock: raw.showOutOfStock !== false,
+            productButtons: parseProductButtons(raw.productButtons)
         };
     }
     function setSettings(next) {
@@ -225,6 +245,13 @@ const BWS = (function () {
         setSettings,
         getDefaultSettings: () => JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
         resetSettings: () => localStorage.removeItem(LS_SETTINGS),
+
+        // Which product-card buttons to show for the current viewer. audience:
+        // 'registered' (logged-in) or 'guest'. Returns { order, cart, fav }.
+        buttonVisibility(audience) {
+            const pb = getSettings().productButtons;
+            return audience === 'registered' ? pb.registered : pb.guest;
+        },
 
         // Pull the store's settings from the server and cache them locally so
         // applyThemeAndAnnouncement() (sync) reflects them on the next render.

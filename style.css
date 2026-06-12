@@ -588,24 +588,36 @@ a.product-link {
 }
 
 /* ===== Favorite (heart) button — sits beside the add button ===== */
+/* Heart overlays the product image at the top-LEFT corner (absolute over the
+   card; the card is position:relative). A round translucent chip keeps it
+   readable over any image. */
 .fav-btn {
-    flex: 0 0 auto;
-    width: 42px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg-white);
-    color: #cfcfcf;
-    font-size: 19px;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 3;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    color: #bdbdbd;
+    font-size: 17px;
     line-height: 1;
     cursor: pointer;
-    transition: transform 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    transition: transform 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
-.fav-btn:hover { transform: scale(1.06); }
+.fav-btn:hover { transform: scale(1.1); color: #e0245e; }
 
 .fav-btn.active {
     color: #e0245e;
-    border-color: #f3b6c6;
+    background: #fff;
 }
 
 /* ===== Products pager (all-products mode) ===== */

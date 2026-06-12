@@ -381,6 +381,12 @@ function wireSettingsPage() {
         sizeOrderGuest: document.getElementById('sizeOrderGuest'),
         sizeOrderRegistered: document.getElementById('sizeOrderRegistered'),
         showOutOfStock: document.getElementById('showOutOfStock'),
+        btnGuestOrder: document.getElementById('btnGuestOrder'),
+        btnGuestCart: document.getElementById('btnGuestCart'),
+        btnGuestFav: document.getElementById('btnGuestFav'),
+        btnRegOrder: document.getElementById('btnRegOrder'),
+        btnRegCart: document.getElementById('btnRegCart'),
+        btnRegFav: document.getElementById('btnRegFav'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
@@ -460,6 +466,14 @@ function wireSettingsPage() {
         if (fields.sizeOrderGuest) fields.sizeOrderGuest.checked = s.sizeOrderGuest === true;
         if (fields.sizeOrderRegistered) fields.sizeOrderRegistered.checked = s.sizeOrderRegistered === true;
         if (fields.showOutOfStock) fields.showOutOfStock.checked = s.showOutOfStock !== false;
+        const pb = (s.productButtons && typeof s.productButtons === 'object') ? s.productButtons : {};
+        const g = pb.guest || {}, rg = pb.registered || {};
+        if (fields.btnGuestOrder) fields.btnGuestOrder.checked = g.order !== false;
+        if (fields.btnGuestCart)  fields.btnGuestCart.checked  = g.cart !== false;
+        if (fields.btnGuestFav)   fields.btnGuestFav.checked   = g.fav === true;
+        if (fields.btnRegOrder)   fields.btnRegOrder.checked   = rg.order !== false;
+        if (fields.btnRegCart)    fields.btnRegCart.checked    = rg.cart !== false;
+        if (fields.btnRegFav)     fields.btnRegFav.checked     = rg.fav !== false;
         syncPageSizeVisibility();
         updatePreview();
     }
@@ -571,7 +585,19 @@ function wireSettingsPage() {
             delivery: _delivery,
             sizeOrderGuest: !!fields.sizeOrderGuest?.checked,
             sizeOrderRegistered: !!fields.sizeOrderRegistered?.checked,
-            showOutOfStock: fields.showOutOfStock ? !!fields.showOutOfStock.checked : true
+            showOutOfStock: fields.showOutOfStock ? !!fields.showOutOfStock.checked : true,
+            productButtons: {
+                guest: {
+                    order: !!fields.btnGuestOrder?.checked,
+                    cart: !!fields.btnGuestCart?.checked,
+                    fav: !!fields.btnGuestFav?.checked
+                },
+                registered: {
+                    order: !!fields.btnRegOrder?.checked,
+                    cart: !!fields.btnRegCart?.checked,
+                    fav: !!fields.btnRegFav?.checked
+                }
+            }
         };
     }
 
