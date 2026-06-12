@@ -339,13 +339,20 @@ img {
 .category-placeholder {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
-    color: white;
+    background: #f1f1f3;
+    color: #9aa0a6;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 28px;
     font-weight: 700;
+}
+
+.category-placeholder svg {
+    width: 42%;
+    height: 42%;
+    max-width: 64px;
+    max-height: 64px;
 }
 
 /* Default product image: neutral gray box icon (no site color, no letter). */
@@ -502,7 +509,7 @@ img {
 .product-price {
     font-size: 15px;
     font-weight: 700;
-    color: var(--primary);
+    color: var(--price-color, var(--primary));
     text-align: center;
     margin-bottom: 4px;
 }
@@ -531,7 +538,7 @@ img {
 }
 
 .add-cart-btn {
-    background-color: var(--primary);
+    background-color: var(--order-btn-color, var(--primary));
     color: white;
     padding: 9px 10px;
     border-radius: var(--radius);
@@ -570,7 +577,7 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--primary);
+    background-color: var(--cart-btn-color, var(--primary));
     color: #fff;
     border: none;
     border-radius: var(--radius);
@@ -613,10 +620,10 @@ a.product-link {
     transition: transform 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
-.fav-btn:hover { transform: scale(1.1); color: #e0245e; }
+.fav-btn:hover { transform: scale(1.1); color: var(--fav-color, #e0245e); }
 
 .fav-btn.active {
-    color: #e0245e;
+    color: var(--fav-color, #e0245e);
     background: #fff;
 }
 
@@ -1567,6 +1574,27 @@ a.product-link {
 }
 
 /* ===== نافذة الطلب بالأحجام ===== */
+/* Size-edit control inside the cart line. */
+.cart-sizes-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.size-edit-btn {
+    background: #fff;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    border-radius: var(--radius);
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.size-edit-btn:hover { background: var(--primary); color: #fff; }
+.cart-sizes-summary { font-size: 11.5px; color: var(--text-muted); }
+
 .size-modal-overlay {
     position: fixed;
     inset: 0;

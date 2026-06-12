@@ -44,7 +44,12 @@ const BWS = (function () {
         theme: {
             primary: '#ed5a1a',
             primaryDark: '#c94a14',
-            primaryLight: '#ff7c3e'
+            primaryLight: '#ff7c3e',
+            // فارغة = «اتبع اللون الرئيسي» (للقلب: الأحمر الافتراضي). تُحَلّ في getSettings.
+            priceColor: '',
+            orderBtnColor: '',
+            cartBtnColor: '',
+            favColor: ''
         },
         announcement: '',
         cartMode: 'page',
@@ -146,8 +151,21 @@ const BWS = (function () {
         const raw = readJSON(LS_SETTINGS, null);
         if (!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
         const pageSize = Number(raw.pageSize);
+        const rawTheme = raw.theme || {};
+        const baseTheme = { ...DEFAULT_SETTINGS.theme, ...rawTheme };
+        const primary = baseTheme.primary;
         return {
-            theme: { ...DEFAULT_SETTINGS.theme, ...(raw.theme || {}) },
+            // Price + button colors default to the primary (so existing stores keep
+            // their look) until the admin sets a distinct colour; heart → red.
+            theme: {
+                primary,
+                primaryDark: baseTheme.primaryDark,
+                primaryLight: baseTheme.primaryLight,
+                priceColor: rawTheme.priceColor || primary,
+                orderBtnColor: rawTheme.orderBtnColor || primary,
+                cartBtnColor: rawTheme.cartBtnColor || primary,
+                favColor: rawTheme.favColor || '#e0245e'
+            },
             announcement: typeof raw.announcement === 'string'
                 ? raw.announcement : DEFAULT_SETTINGS.announcement,
             cartMode: raw.cartMode === 'sidebar' ? 'sidebar' : 'page',
@@ -554,12 +572,8 @@ const BWS = (function () {
             if (existing) {
                 existing.qty = Math.min(existing.qty + qty, cap);
             } else {
-                // Snapshot the product's tier prices so the cart can switch
-                // between them later (per-product pricing) without re-querying.
                 const prices = this.productTierPrices(product);
-                const tier = this.isPricePerProduct()
-                    ? this.firstAllowedTier()
-                    : this.getGlobalTier();
+                const tier = this.currentTier();
                 cart.push({
                     uuid: product.uuid,
                     id: product.id ?? null,
@@ -571,7 +585,9 @@ const BWS = (function () {
                     unitType: product.unitType || 'قطعة',
                     imageUrl: product.imageUrl || '',
                     maxQty: cap,
-                    qty: Math.min(qty, cap)
+                    qty: Math.min(qty, cap),
+                    // Available sizes for this product → lets the cart offer size editing.
+                    allSizes: Array.isArray(product.sizes) ? product.sizes : []
                 });
             }
             setCart(cart);
@@ -584,9 +600,7 @@ const BWS = (function () {
             if (!product || !product.uuid || !(totalQty > 0)) return false;
             const cart = getCart();
             const prices = this.productTierPrices(product);
-            const tier = this.isPricePerProduct()
-                ? this.firstAllowedTier()
-                : this.getGlobalTier();
+            const tier = this.currentTier();
             cart.push({
                 uuid: product.uuid,
                 id: product.id ?? null,
@@ -600,10 +614,22 @@ const BWS = (function () {
                 maxQty: Number(product.quantity),
                 qty: totalQty,
                 unitQty: Number(unitQty) || 0,
-                sizes: Array.isArray(sizes) ? sizes : []
+                sizes: Array.isArray(sizes) ? sizes : [],
+                allSizes: Array.isArray(product.sizes) ? product.sizes : []
             });
             setCart(cart);
             return true;
+        },
+
+        // Update an existing cart item's size breakdown (edited from the cart).
+        updateCartItemSizes(uuid, totalQty, unitQty, sizes) {
+            const cart = getCart();
+            const item = cart.find(it => it.uuid === uuid);
+            if (!item) return;
+            item.qty = Number(totalQty) || item.qty;
+            item.unitQty = Number(unitQty) || 0;
+            item.sizes = Array.isArray(sizes) ? sizes : [];
+            setCart(cart);
         },
 
         // Switch a cart item to another allowed price tier (per-product mode).
@@ -765,6 +791,18 @@ const BWS = (function () {
             return clean.length ? Array.from(new Set(clean)).sort((a, b) => a - b) : [1];
         },
         firstAllowedTier() { return this.allowedTiers()[0]; },
+        // The single price tier shown to the current viewer: a registered customer
+        // sees the ONE tier assigned to them; a guest sees the site (guest) tier set
+        // from the mobile app. Customers now have exactly one price — no switching.
+        currentTier() {
+            const c = getCustomerSession();
+            if (!c) {
+                const g = Number(getSettings().guestPriceTier) || 1;
+                return (g >= 1 && g <= 7) ? g : 1;
+            }
+            const t = (Array.isArray(c.priceTiers) ? c.priceTiers : []).map(Number).filter(n => n >= 1 && n <= 7);
+            return t.length ? t[0] : 1;
+        },
         isPricePerProduct() {
             const c = getCustomerSession();
             return !!(c && c.pricePerProduct) && this.allowedTiers().length > 1;
@@ -809,11 +847,9 @@ const BWS = (function () {
             const i = tiers.indexOf(Number(currentTier));
             return tiers[(i + 1) % tiers.length];
         },
-        // Effective price shown on a product card (before adding to cart).
+        // Effective price shown on a product card = the viewer's single tier.
         effectivePrice(product) {
-            const prices = this.productTierPrices(product);
-            const tier = this.isPricePerProduct() ? this.firstAllowedTier() : this.getGlobalTier();
-            return this.priceForTier(prices, tier);
+            return this.priceForTier(this.productTierPrices(product), this.currentTier());
         },
         tierLabel(t) { return 'سعر ' + t; },
 

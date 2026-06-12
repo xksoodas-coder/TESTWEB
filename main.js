@@ -299,6 +299,11 @@ function applyThemeAndAnnouncement() {
     root.style.setProperty('--primary', settings.theme.primary);
     root.style.setProperty('--primary-dark', settings.theme.primaryDark);
     root.style.setProperty('--primary-light', settings.theme.primaryLight);
+    // Per-element colors (price / order button / cart button / heart).
+    root.style.setProperty('--price-color', settings.theme.priceColor);
+    root.style.setProperty('--order-btn-color', settings.theme.orderBtnColor);
+    root.style.setProperty('--cart-btn-color', settings.theme.cartBtnColor);
+    root.style.setProperty('--fav-color', settings.theme.favColor);
     root.style.setProperty('--products-per-row', settings.productsPerRow || 7);
     root.style.setProperty('--families-per-row', settings.familiesPerRow || 4);
 
@@ -429,12 +434,14 @@ function renderCartSidebar() {
                         <span class="qty-value">${it.qty}</span>
                         <button class="qty-btn qty-inc" aria-label="زيادة">+</button>
                     </div>
+                    ${sizeEditHtml(it)}
                 </div>
                 <button class="sidebar-item-remove" aria-label="حذف">×</button>
             </div>
         `).join('');
         container.querySelectorAll('.sidebar-item').forEach(row => {
             const uuid = row.dataset.uuid;
+            wireSizeEdit(row, uuid, renderCartSidebar);
             row.querySelector('.sidebar-item-remove').addEventListener('click', () => {
                 BWS.removeFromCart(uuid);
                 renderCartSidebar();
@@ -665,11 +672,24 @@ async function renderAllProductsMode(grid, pageSize) {
     await loadPage(1);
 }
 
-function renderImageOrPlaceholder(src, fallbackText) {
+// Default category image when a main/sub family has no picture: a neutral gray
+// "category" (grid) icon — same gray treatment as the product box, but a
+// category glyph. The old colored first-letter tile is gone.
+const CATEGORY_BOX_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+
+function makeCategoryPlaceholder() {
+    const div = document.createElement('div');
+    div.className = 'category-placeholder';
+    div.innerHTML = CATEGORY_BOX_SVG;
+    return div;
+}
+window.makeCategoryPlaceholder = makeCategoryPlaceholder;
+
+function renderImageOrPlaceholder(src) {
     if (src) {
-        return `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" onerror="this.replaceWith(makePlaceholder('${escapeHtml(fallbackText)}'))">`;
+        return `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" onerror="this.replaceWith(makeCategoryPlaceholder())">`;
     }
-    return `<div class="category-placeholder">${escapeHtml(fallbackText)}</div>`;
+    return `<div class="category-placeholder">${CATEGORY_BOX_SVG}</div>`;
 }
 
 // Default product image: a neutral gray box icon (no site color, no letter).
@@ -1001,48 +1021,15 @@ function renderProductCard(p) {
 // Global price-tier selector (shown only in "apply to all products" mode when
 // the customer is allowed more than one tier). Switches the price shown on all
 // cards at once.
-function setupPriceTierBar(products, grid, favoritesMode) {
-    const section = document.querySelector('.page-title-section');
-    const existing = document.getElementById('priceTierBar');
-
-    if (BWS.isPricePerProduct() || BWS.allowedTiers().length <= 1) {
-        if (existing) existing.remove();
-        return;
-    }
-
-    let bar = existing;
-    if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'priceTierBar';
-        bar.className = 'price-tier-bar';
-        if (section) section.appendChild(bar);
-        else grid.parentElement.insertBefore(bar, grid);
-    }
-
-    const tiers = BWS.allowedTiers();
-    const current = BWS.getGlobalTier();
-    bar.innerHTML = '<span class="ptb-label">السعر المعروض:</span>' +
-        tiers.map(t =>
-            `<button class="ptb-btn${t === current ? ' active' : ''}" data-tier="${t}">${escapeHtml(BWS.tierLabel(t))}</button>`
-        ).join('');
-
-    bar.querySelectorAll('.ptb-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            BWS.setGlobalTier(Number(btn.dataset.tier));
-            grid.innerHTML = products.map(renderProductCard).join('');
-            wireProductCards(grid, products, favoritesMode);
-            setupPriceTierBar(products, grid, favoritesMode);
-            deferHydrate(grid);
-        });
-    });
+// Price switching is removed: each customer has exactly ONE price tier, so there
+// is no «السعر المعروض» bar. Kept as a no-op that clears any stale bar.
+function setupPriceTierBar() {
+    document.getElementById('priceTierBar')?.remove();
 }
 
-// Small per-product price-switch control (per-product pricing mode).
-function priceArrowHtml(it) {
-    if (!BWS.isPricePerProduct() || !it.prices) return '';
-    if (BWS.itemUsableTiers(it.prices).length <= 1) return '';
-    return ` <span class="tier-tag">${escapeHtml(BWS.tierLabel(it.tier || 1))}</span>` +
-           `<button class="price-switch-btn" type="button" title="تغيير السعر">⇄</button>`;
+// No per-item price switch anymore (single tier per customer).
+function priceArrowHtml() {
+    return '';
 }
 
 function wireProductCards(grid, products, favoritesMode) {
@@ -1055,21 +1042,12 @@ function wireProductCards(grid, products, favoritesMode) {
         const uuid = card.dataset.uuid;
 
         // Add to cart (the small cart-icon button; the big button is an order link).
+        // Size selection now happens IN THE CART (a «🔧 الأحجام» button per line),
+        // so adding here is a plain add — the product's available sizes ride along.
         const addBtn = card.querySelector('.cart-icon-btn');
         if (addBtn) {
-            addBtn.addEventListener('click', async () => {
+            addBtn.addEventListener('click', () => {
                 const product = productByUuid.get(uuid);
-                // الطلب بالأحجام مفعَّل + للمنتج أحجام → نافذة اختيار الأحجام.
-                if (BWS.sizeOrderingEnabled() && Array.isArray(product?.sizes) && product.sizes.length) {
-                    const res = await showSizeOrderDialog(product);
-                    if (!res) return;
-                    if (BWS.addToCartSized(product, res.total, res.unitQty, res.sizes)) {
-                        updateCartBadge();
-                        if (document.getElementById('cartSidebar')?.classList.contains('open')) renderCartSidebar();
-                        showToast('تمت إضافة المنتج إلى السلة');
-                    }
-                    return;
-                }
                 if (BWS.addToCart(product, 1)) {
                     updateCartBadge();
                     if (document.getElementById('cartSidebar')?.classList.contains('open')) {
@@ -1156,6 +1134,7 @@ function renderCartPage() {
                 <h4>${escapeHtml(item.name)}</h4>
                 <div class="item-price">${BWS.formatPrice(item.price)}${priceArrowHtml(item)}</div>
                 <div style="font-size:12px;color:var(--text-muted)">${escapeHtml(item.family || '')}</div>
+                ${sizeEditHtml(item)}
             </div>
             <div class="qty-controls">
                 <button class="qty-btn qty-dec" aria-label="تقليل">−</button>
@@ -1189,6 +1168,7 @@ function renderCartPage() {
             updateCartBadge();
             showToast('تم حذف المنتج من السلة');
         });
+        wireSizeEdit(row, uuid, renderCartPage);
         const switchBtn = row.querySelector('.price-switch-btn');
         if (switchBtn) {
             switchBtn.addEventListener('click', () => {
@@ -1217,7 +1197,7 @@ function renderCartPage() {
         if (guestCheckout) {
             const v = id => (document.getElementById(id)?.value || '').trim();
             const name = v('ckName'), phone = v('ckPhone'), wilaya = v('ckWilaya');
-            const notes = v('ckNotes');
+            const baladiya = v('ckBaladiya'), notes = v('ckNotes');
             const deliveryType = document.getElementById('ckDelivery')?.value || 'home';
             if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
             if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
@@ -1229,7 +1209,7 @@ function renderCartPage() {
                 unitType: it.unitType || 'قطعة'
             }));
             const result = await BWS.submitGuestOrder({
-                items, name, phone, wilaya, deliveryType, notes,
+                items, name, phone, wilaya, baladiya, deliveryType, notes,
                 delivery: cartDeliveryFee()
             });
             if (result.ok) {
@@ -1292,6 +1272,9 @@ function ensureGuestCheckoutForm(summary) {
             <option value="">الولاية</option>
             ${wilayas.map(w => `<option value="${escapeHtml(w.code + ' - ' + w.name)}" data-wid="${w.id}">${escapeHtml(w.code + ' - ' + w.name)}</option>`).join('')}
         </select>
+        <select id="ckBaladiya" disabled>
+            <option value="">البلدية / الدائرة</option>
+        </select>
         <select id="ckDelivery">
             <option value="home">🏠 توصيل إلى المنزل</option>
             <option value="office">🏢 توصيل إلى المكتب</option>
@@ -1310,7 +1293,11 @@ function ensureGuestCheckoutForm(summary) {
     summary.insertBefore(form, checkoutBtn);
 
     const wilSel = document.getElementById('ckWilaya');
-    wilSel.addEventListener('change', updateCartDeliveryUI);
+    const balSel = document.getElementById('ckBaladiya');
+    wilSel.addEventListener('change', () => {
+        populateCartBaladiyas(wilSel, balSel);
+        updateCartDeliveryUI();
+    });
     document.getElementById('ckDelivery').addEventListener('change', updateCartDeliveryUI);
     updateCartDeliveryUI();
 }
@@ -1338,28 +1325,79 @@ function removeGuestCheckoutForm() {
     document.getElementById('guestCheckoutForm')?.remove();
 }
 
+// Fill the cart baladiya dropdown with the communes of the selected wilaya
+// (optional delivery-address info — the home fee stays per-wilaya).
+function populateCartBaladiyas(wilSel, balSel) {
+    if (!balSel) return;
+    const opt = wilSel.options[wilSel.selectedIndex];
+    const wid = opt ? opt.getAttribute('data-wid') : '';
+    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
+    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
+        communes.map(c => {
+            const label = (c.code ? c.code + ' - ' : '') + c.name;
+            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
+        }).join('');
+    balSel.disabled = communes.length === 0;
+}
+
 // ===== نافذة الطلب بالأحجام =====
 // تُرجع { total, unitQty, sizes:[{name,capacity,qty}] } أو null عند الإلغاء.
-function showSizeOrderDialog(product) {
+// Size-editing controls for a cart line (shown only when size ordering is enabled
+// for the current viewer AND the product has size definitions). Lets the customer
+// choose/change sizes from inside the cart.
+function sizeEditHtml(item) {
+    if (!BWS.sizeOrderingEnabled() || !Array.isArray(item.allSizes) || !item.allSizes.length) return '';
+    const chosen = Array.isArray(item.sizes) ? item.sizes.filter(s => Number(s.qty) > 0) : [];
+    const summary = chosen.length
+        ? chosen.map(s => `${escapeHtml(s.name)}×${s.qty}`).join('، ')
+        : 'اختر الأحجام';
+    return `<div class="cart-sizes-line">
+        <button class="size-edit-btn" type="button">🔧 الأحجام</button>
+        <span class="cart-sizes-summary">${summary}</span>
+    </div>`;
+}
+
+function wireSizeEdit(row, uuid, rerender) {
+    const btn = row.querySelector('.size-edit-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        const cur = BWS.getCart().find(it => it.uuid === uuid);
+        if (!cur || !Array.isArray(cur.allSizes) || !cur.allSizes.length) return;
+        const product = { name: cur.name, quantity: cur.maxQty, sizes: cur.allSizes };
+        const res = await showSizeOrderDialog(product, { unitQty: cur.unitQty || 0, sizes: cur.sizes || [] });
+        if (!res) return;
+        BWS.updateCartItemSizes(uuid, res.total, res.unitQty, res.sizes);
+        updateCartBadge();
+        rerender();
+    });
+}
+
+function showSizeOrderDialog(product, initial) {
     return new Promise((resolve) => {
         const cap = Number(product.quantity) || 0;
+        const initSizes = (initial && Array.isArray(initial.sizes)) ? initial.sizes : [];
+        const initQtyOf = (name) => {
+            const m = initSizes.find(s => s.name === name);
+            return m ? (Number(m.qty) || 0) : 0;
+        };
         const sizes = (product.sizes || []).map(s => ({
-            name: s.name, capacity: Number(s.capacity) || 0, qty: 0
+            name: s.name, capacity: Number(s.capacity) || 0, qty: initQtyOf(s.name)
         }));
-        let unitQty = 1;
+        let unitQty = initial ? (Number(initial.unitQty) || 0) : 1;
+        const okLabel = initial ? 'تحديث السلة' : 'إضافة للسلة';
 
         const overlay = document.createElement('div');
         overlay.className = 'size-modal-overlay';
         overlay.innerHTML =
             '<div class="size-modal" dir="rtl">' +
             `<h3>${escapeHtml(product.name)}</h3>` +
-            '<div class="size-total">الكمية الإجمالية: <b id="szTotal">1</b></div>' +
+            '<div class="size-total">الكمية الإجمالية: <b id="szTotal">0</b></div>' +
             '<div class="size-row"><span>الكمية بالوحدة</span>' +
-            '<input type="number" id="szUnit" min="0" value="1" class="size-qty"></div>' +
+            `<input type="number" id="szUnit" min="0" value="${unitQty}" class="size-qty"></div>` +
             '<div id="szSizes"></div>' +
             '<div class="size-actions">' +
             '<button type="button" class="size-cancel">إلغاء</button>' +
-            '<button type="button" class="size-ok">إضافة للسلة</button>' +
+            `<button type="button" class="size-ok">${escapeHtml(okLabel)}</button>` +
             '</div></div>';
         document.body.appendChild(overlay);
 
@@ -1367,8 +1405,8 @@ function showSizeOrderDialog(product) {
         szSizes.innerHTML = sizes.map((s, i) =>
             '<div class="size-row">' +
             `<span>${escapeHtml(s.name)} (سعة ${s.capacity})</span>` +
-            `<input type="number" min="0" value="0" data-i="${i}" class="size-qty sz-size">` +
-            `<span class="sz-sub" data-i="${i}">× ${s.capacity} = 0</span>` +
+            `<input type="number" min="0" value="${s.qty}" data-i="${i}" class="size-qty sz-size">` +
+            `<span class="sz-sub" data-i="${i}">× ${s.capacity} = ${s.qty * s.capacity}</span>` +
             '</div>').join('');
 
         const recompute = () => {

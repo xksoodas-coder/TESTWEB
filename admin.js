@@ -361,6 +361,14 @@ function wireSettingsPage() {
         primaryDarkHex: document.getElementById('primaryDarkHex'),
         primaryLight: document.getElementById('primaryLight'),
         primaryLightHex: document.getElementById('primaryLightHex'),
+        priceColor: document.getElementById('priceColor'),
+        priceColorHex: document.getElementById('priceColorHex'),
+        orderBtnColor: document.getElementById('orderBtnColor'),
+        orderBtnColorHex: document.getElementById('orderBtnColorHex'),
+        cartBtnColor: document.getElementById('cartBtnColor'),
+        cartBtnColorHex: document.getElementById('cartBtnColorHex'),
+        favColor: document.getElementById('favColor'),
+        favColorHex: document.getElementById('favColorHex'),
         announcement: document.getElementById('announcement'),
         cartModePage: document.getElementById('cartModePage'),
         cartModeSidebar: document.getElementById('cartModeSidebar'),
@@ -444,6 +452,10 @@ function wireSettingsPage() {
         setColorPair(fields.primary, fields.primaryHex, s.theme.primary);
         setColorPair(fields.primaryDark, fields.primaryDarkHex, s.theme.primaryDark);
         setColorPair(fields.primaryLight, fields.primaryLightHex, s.theme.primaryLight);
+        setColorPair(fields.priceColor, fields.priceColorHex, s.theme.priceColor);
+        setColorPair(fields.orderBtnColor, fields.orderBtnColorHex, s.theme.orderBtnColor);
+        setColorPair(fields.cartBtnColor, fields.cartBtnColorHex, s.theme.cartBtnColor);
+        setColorPair(fields.favColor, fields.favColorHex, s.theme.favColor);
         fields.announcement.value = s.announcement || '';
         if (s.cartMode === 'sidebar') fields.cartModeSidebar.checked = true;
         else fields.cartModePage.checked = true;
@@ -515,31 +527,30 @@ function wireSettingsPage() {
         });
     }
 
+    // قائمة موحَّدة: كل ولاية في سطر واحد، سعر المكتب وسعر المنزل جنباً إلى جنب،
+    // وكلٌّ منهما يُحذف على حدة.
     function renderDeliveryList() {
         const el = document.getElementById('delList');
         if (!el) return;
-        const rows = [];
-        const officeKeys = Object.keys(_delivery.office || {});
-        const homeKeys = Object.keys(_delivery.home || {});
-        if (officeKeys.length) {
-            rows.push('<div style="margin-top:10px;font-weight:700">🏢 المكتب (حسب الولاية)</div>');
-            for (const wid of officeKeys) {
-                rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee">
-                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} — <b>${_delivery.office[wid]}</b> د.ج</span>
-                    <button type="button" class="ghost-btn del-rm" data-kind="office" data-key="${escapeHtmlAdmin(wid)}">حذف</button>
-                </div>`);
-            }
+        const office = _delivery.office || {};
+        const home = _delivery.home || {};
+        const wids = Array.from(new Set([...Object.keys(office), ...Object.keys(home)]))
+            .sort((a, b) => Number(a) - Number(b));
+        if (!wids.length) {
+            el.innerHTML = '<p class="muted" style="font-size:12px">لا توجد أسعار توصيل بعد.</p>';
+            return;
         }
-        if (homeKeys.length) {
-            rows.push('<div style="margin-top:10px;font-weight:700">🏠 المنزل (حسب الولاية)</div>');
-            for (const wid of homeKeys) {
-                rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee">
-                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} — <b>${_delivery.home[wid]}</b> د.ج</span>
-                    <button type="button" class="ghost-btn del-rm" data-kind="home" data-key="${escapeHtmlAdmin(wid)}">حذف</button>
-                </div>`);
-            }
-        }
-        el.innerHTML = rows.join('') || '<p class="muted" style="font-size:12px">لا توجد أسعار توصيل بعد.</p>';
+        const part = (label, val, kind, wid) => (val != null && val !== '')
+            ? `${label} <b>${escapeHtmlAdmin(String(val))}</b> د.ج <button type="button" class="ghost-btn del-rm" data-kind="${kind}" data-key="${escapeHtmlAdmin(wid)}" title="حذف">×</button>`
+            : `<span style="color:#bbb">${label} —</span>`;
+        el.innerHTML = wids.map(wid => `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eee;flex-wrap:wrap">
+                <span style="font-weight:700;min-width:120px">${escapeHtmlAdmin(_widName[wid] || wid)}</span>
+                <span style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12.5px">
+                    <span>${part('🏢 مكتب', office[wid], 'office', wid)}</span>
+                    <span>${part('🏠 منزل', home[wid], 'home', wid)}</span>
+                </span>
+            </div>`).join('');
         el.querySelectorAll('.del-rm').forEach(b => {
             b.addEventListener('click', () => {
                 const kind = b.getAttribute('data-kind');
@@ -561,6 +572,10 @@ function wireSettingsPage() {
     syncColorToHex(fields.primary, fields.primaryHex);
     syncColorToHex(fields.primaryDark, fields.primaryDarkHex);
     syncColorToHex(fields.primaryLight, fields.primaryLightHex);
+    syncColorToHex(fields.priceColor, fields.priceColorHex);
+    syncColorToHex(fields.orderBtnColor, fields.orderBtnColorHex);
+    syncColorToHex(fields.cartBtnColor, fields.cartBtnColorHex);
+    syncColorToHex(fields.favColor, fields.favColorHex);
     setupDeliveryUI();
 
     // يجمع كل إعدادات الموقع من النموذج (تُستعمل في الحفظ اليدوي وفي حفظ أسعار
@@ -573,7 +588,11 @@ function wireSettingsPage() {
             theme: {
                 primary: fields.primary.value,
                 primaryDark: fields.primaryDark.value,
-                primaryLight: fields.primaryLight.value
+                primaryLight: fields.primaryLight.value,
+                priceColor: fields.priceColor?.value || '',
+                orderBtnColor: fields.orderBtnColor?.value || '',
+                cartBtnColor: fields.cartBtnColor?.value || '',
+                favColor: fields.favColor?.value || ''
             },
             announcement: fields.announcement.value,
             cartMode: fields.cartModeSidebar.checked ? 'sidebar' : 'page',

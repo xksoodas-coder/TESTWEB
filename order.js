@@ -258,7 +258,7 @@ function captureForm() {
     const g = id => (document.getElementById(id) || {}).value || '';
     return {
         name: g('ofName'), phone: g('ofPhone'), wilaya: g('ofWilaya'),
-        delivery: g('ofDelivery'), notes: g('ofNotes')
+        baladiya: g('ofBaladiya'), delivery: g('ofDelivery'), notes: g('ofNotes')
     };
 }
 function restoreForm(v) {
@@ -266,7 +266,12 @@ function restoreForm(v) {
     const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
     set('ofName', v.name); set('ofPhone', v.phone); set('ofNotes', v.notes);
     const wil = document.getElementById('ofWilaya');
-    if (wil && v.wilaya) wil.value = v.wilaya;
+    if (wil && v.wilaya) {
+        wil.value = v.wilaya;
+        populateBaladiyas(wil, document.getElementById('ofBaladiya'));
+        const bal = document.getElementById('ofBaladiya');
+        if (bal && v.baladiya) bal.value = v.baladiya;
+    }
     set('ofDelivery', v.delivery);
 }
 
@@ -345,13 +350,18 @@ function renderOrderPage() {
                         </select>
                     </div>
                     <div class="of-field">
+                        <select id="ofBaladiya" disabled>
+                            <option value="">البلدية / الدائرة</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="of-row">
+                    <div class="of-field">
                         <select id="ofDelivery">
                             <option value="home">🏠 توصيل إلى المنزل</option>
                             <option value="office">🏢 توصيل إلى المكتب</option>
                         </select>
                     </div>
-                </div>
-                <div class="of-row">
                     <div class="of-field">
                         <input type="text" id="ofNotes" placeholder="ملاحظة (إختيارية)">
                     </div>
@@ -412,13 +422,11 @@ function renderOrderPage() {
     prefillFromSession();
     updateSummary();
 
-    // الزبون المسجَّل: لا تُحتسب له رسوم توصيل → أخفِ نوع التوصيل وسطر سعر التوصيل،
-    // لكن أبقِ اختيار الولاية ظاهراً (ليعرف المتجر مكان التسليم). الولاية اختيارية له.
+    // الزبون المسجَّل: لا تُحتسب له رسوم توصيل → أخفِ سطر «سعر التوصيل» فقط، وتبقى
+    // حقول الولاية/البلدية/نوع التوصيل ظاهرة (لمعرفة مكان التسليم وطريقته).
     if (BWS.getCustomerSession()) {
         const wil = document.getElementById('ofWilaya');
         if (wil) wil.required = false;
-        const del = document.getElementById('ofDelivery');
-        if (del) { const f = del.closest('.of-field'); if (f) f.style.display = 'none'; }
         const dr = document.getElementById('summaryDelivery');
         if (dr) { const row = dr.closest('.summary-row'); if (row) row.style.display = 'none'; }
     }
@@ -577,8 +585,28 @@ function updateSummary() {
 function bindWilayaChange() {
     const wilSel = document.getElementById('ofWilaya');
     if (!wilSel) return;
-    wilSel.addEventListener('change', updateSummary);
+    const balSel = document.getElementById('ofBaladiya');
+    wilSel.addEventListener('change', () => {
+        populateBaladiyas(wilSel, balSel);
+        updateSummary();
+    });
+    balSel?.addEventListener('change', updateSummary);
     document.getElementById('ofDelivery')?.addEventListener('change', updateSummary);
+}
+
+// Fill the baladiya dropdown with the communes of the selected wilaya. The
+// baladiya is OPTIONAL delivery-address info — the home fee stays per-wilaya.
+function populateBaladiyas(wilSel, balSel) {
+    if (!balSel) return;
+    const opt = wilSel.options[wilSel.selectedIndex];
+    const wid = opt ? opt.getAttribute('data-wid') : '';
+    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
+    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
+        communes.map(c => {
+            const label = (c.code ? c.code + ' - ' : '') + c.name;
+            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
+        }).join('');
+    balSel.disabled = communes.length === 0;
 }
 
 function bindSubmit() {
@@ -592,6 +620,7 @@ function bindSubmit() {
         const name = document.getElementById('ofName').value.trim();
         const phone = document.getElementById('ofPhone').value.trim();
         const wilaya = document.getElementById('ofWilaya').value;
+        const baladiya = (document.getElementById('ofBaladiya')?.value || '').trim();
         const notes = (document.getElementById('ofNotes')?.value || '').trim();
         const deliveryType = document.getElementById('ofDelivery')?.value || 'home';
 
@@ -612,7 +641,7 @@ function bindSubmit() {
         btn.textContent = 'جاري الإرسال...';
 
         const delivery = currentDeliveryFee();
-        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, deliveryType, notes, delivery });
+        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes, delivery });
         if (res.ok) {
             document.getElementById('orderPage').innerHTML = `
                 <div class="order-success">
