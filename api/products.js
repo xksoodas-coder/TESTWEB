@@ -1,5 +1,5 @@
 import { getTursoClient } from './_lib/turso.js';
-import { resolveReadAccess } from './_lib/access.js';
+import { resolveReadAccess, getStoreSettings } from './_lib/access.js';
 import { getCatalog } from './_lib/catalog.js';
 
 /**
@@ -51,10 +51,16 @@ export default async function handler(req, res) {
             } catch { /* table missing → no favourites yet */ }
         }
 
+        // When the store hides out-of-stock items, drop them server-side so they
+        // are never sent (lighter response) — default is to show them as «غير متاح».
+        const settings = await getStoreSettings(storeId);
+        const hideOOS = settings.showOutOfStock === false;
+
         // Whole catalogue (shaped, snapshot-cached) → apply the request filters.
         const catalog = await getCatalog(client, storeId);
         const products = [];
         for (const p of catalog) {
+            if (hideOOS && !p.available) continue;
             if (familyFilter && p.family !== familyFilter) continue;
             const isFavorite = favSet.has(p.uuid);
             if (favoritesOnly && !isFavorite) continue;

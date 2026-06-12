@@ -161,10 +161,12 @@ export default async function handler(req, res) {
             const size = familyIdQ > 0 ? Math.max(12, ps) : ps;
             try {
                 const catalog = await getCatalog(client, storeId);
-                let list = catalog;
+                // Hide out-of-stock items when the store opted to (lighter payload).
+                const hideOOS = settings && settings.showOutOfStock === false;
+                let list = hideOOS ? catalog.filter(p => p.available) : catalog;
                 if (familyIdQ > 0) {
                     const fam = Array.isArray(families) ? families.find(f => f.id === familyIdQ) : null;
-                    list = fam ? catalog.filter(p => p.family === fam.name) : [];
+                    list = fam ? list.filter(p => p.family === fam.name) : [];
                 }
                 const total = list.length;
                 const paged = list.slice(0, size).map(p => ({ ...p, isFavorite: false }));

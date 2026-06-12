@@ -61,12 +61,15 @@ const BWS = (function () {
         familiesPerRow: 4,
         // سعر البيع للزائر/الزبون العابر (1..7) — يُضبط من تطبيق الهاتف.
         guestPriceTier: 1,
-        // أسعار التوصيل: office = سعر المكتب لكل ولاية (مفتاح = معرّف الولاية)،
-        // home = سعر المنزل لكل بلدية (مفتاح = "wilayaId|labelالبلدية").
+        // أسعار التوصيل: office = سعر المكتب لكل ولاية، home = سعر المنزل لكل ولاية
+        // (كلاهما مفتاحه = معرّف الولاية؛ المنزل لم يعد يعتمد على البلدية).
         delivery: { office: {}, home: {} },
         // صلاحية الطلب بالأحجام (لكل فئة): العابر / المسجَّل.
         sizeOrderGuest: false,
-        sizeOrderRegistered: false
+        sizeOrderRegistered: false,
+        // إظهار المنتجات التي نفد مخزونها (≤0) كـ«غير متاح». عند الإطفاء تُخفى كليًا
+        // فلا يُعرض ولا يُرسَل سوى المتوفّر (أخفّ وأذكى). الافتراضي: إظهار.
+        showOutOfStock: true
     };
 
     // In-memory cache, refilled per page load.
@@ -81,6 +84,7 @@ const BWS = (function () {
     // browser HTTP cache handles the images themselves.
     const CATALOG_TTL = 120000; // 2 min freshness window
     let _catalogCache = null;   // { products, ts }
+    let _catalogPrefetch = null; // in-flight prefetch promise (dedupes warm calls)
     const _productDetailCache = new Map(); // uuid -> detail object
     function _catalogKey() { return 'bws_catalog_' + (getTenantSlug() || '_'); }
     function _readSessionCatalog() {
@@ -103,6 +107,19 @@ const BWS = (function () {
     }
     function writeJSON(key, value) {
         localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    // Migrate the home-delivery map from the old per-baladiya keys
+    // ("wilayaId|baladiya") to the new per-wilaya keys ("wilayaId"). Collapsing
+    // keeps existing stores working without a re-save (last value per wilaya wins).
+    function collapseHomeKeys(h) {
+        if (!h || typeof h !== 'object') return {};
+        const out = {};
+        for (const k of Object.keys(h)) {
+            const wid = String(k).split('|')[0];
+            if (wid) out[wid] = Number(h[k]) || 0;
+        }
+        return out;
     }
 
     // ----- settings (admin) -----
@@ -128,11 +145,12 @@ const BWS = (function () {
             delivery: (raw.delivery && typeof raw.delivery === 'object')
                 ? {
                     office: (raw.delivery.office && typeof raw.delivery.office === 'object') ? raw.delivery.office : {},
-                    home: (raw.delivery.home && typeof raw.delivery.home === 'object') ? raw.delivery.home : {}
+                    home: collapseHomeKeys(raw.delivery.home)
                   }
                 : { office: {}, home: {} },
             sizeOrderGuest: raw.sizeOrderGuest === true,
-            sizeOrderRegistered: raw.sizeOrderRegistered === true
+            sizeOrderRegistered: raw.sizeOrderRegistered === true,
+            showOutOfStock: raw.showOutOfStock !== false
         };
     }
     function setSettings(next) {
@@ -476,6 +494,17 @@ const BWS = (function () {
             return _writeCatalog(data.products || []);
         },
 
+        // Warm the full-catalog cache in the background (deduped + never throws),
+        // so opening a category later renders instantly from the client cache.
+        prefetchCatalog() {
+            if (this.catalogIsFresh()) return Promise.resolve(this.getCachedCatalog());
+            if (_catalogPrefetch) return _catalogPrefetch;
+            _catalogPrefetch = this.fetchCatalog({ force: true })
+                .catch(() => null)
+                .finally(() => { _catalogPrefetch = null; });
+            return _catalogPrefetch;
+        },
+
         // Single-product detail with an in-memory cache (descriptions, etc.).
         async fetchProductDetailCached(uuid) {
             if (!uuid) return null;
@@ -775,11 +804,12 @@ const BWS = (function () {
             const d = getSettings().delivery || { office: {}, home: {} };
             const wid = String(wilayaId || '');
             if (!wid) return 0;
+            // المكتب والمنزل كلاهما الآن بسعر واحد لكل ولاية؛ المنزل لا يعتمد البلدية
+            // (يظهر السعر مباشرة بمجرّد اختيار الولاية، اختار بلدية أو لم يختر).
             if (type === 'office') {
                 return Number(d.office?.[wid] ?? 0) || 0;
             }
-            const key = wid + '|' + String(baladiyaLabel || '');
-            return Number(d.home?.[key] ?? 0) || 0;
+            return Number(d.home?.[wid] ?? 0) || 0;
         },
 
         // ----- formatting -----

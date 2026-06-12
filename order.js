@@ -258,7 +258,7 @@ function captureForm() {
     const g = id => (document.getElementById(id) || {}).value || '';
     return {
         name: g('ofName'), phone: g('ofPhone'), wilaya: g('ofWilaya'),
-        baladiya: g('ofBaladiya'), delivery: g('ofDelivery'), notes: g('ofNotes')
+        delivery: g('ofDelivery'), notes: g('ofNotes')
     };
 }
 function restoreForm(v) {
@@ -266,12 +266,7 @@ function restoreForm(v) {
     const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
     set('ofName', v.name); set('ofPhone', v.phone); set('ofNotes', v.notes);
     const wil = document.getElementById('ofWilaya');
-    if (wil && v.wilaya) {
-        wil.value = v.wilaya;
-        populateBaladiyas(wil, document.getElementById('ofBaladiya'));
-        const bal = document.getElementById('ofBaladiya');
-        if (bal && v.baladiya) bal.value = v.baladiya;
-    }
+    if (wil && v.wilaya) wil.value = v.wilaya;
     set('ofDelivery', v.delivery);
 }
 
@@ -350,19 +345,13 @@ function renderOrderPage() {
                         </select>
                     </div>
                     <div class="of-field">
-                        <select id="ofBaladiya" disabled>
-                            <option value="">البلدية / الدائرة</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="of-row">
-                    <div class="of-field">
                         <select id="ofDelivery">
-                            <option value="home">طريقة التسليم</option>
                             <option value="home">🏠 توصيل إلى المنزل</option>
                             <option value="office">🏢 توصيل إلى المكتب</option>
                         </select>
                     </div>
+                </div>
+                <div class="of-row">
                     <div class="of-field">
                         <input type="text" id="ofNotes" placeholder="ملاحظة (إختيارية)">
                     </div>
@@ -548,13 +537,12 @@ function selectedWilayaId() {
     return opt ? (opt.getAttribute('data-wid') || '') : '';
 }
 
-// سعر التوصيل الحالي حسب الولاية/البلدية ونوع التسليم.
+// سعر التوصيل الحالي حسب الولاية ونوع التسليم (لكل ولاية سعرها).
 function currentDeliveryFee() {
     const wid = selectedWilayaId();
     if (!wid) return 0;
-    const baladiya = (document.getElementById('ofBaladiya')?.value || '').trim();
     const type = document.getElementById('ofDelivery')?.value || 'home';
-    return BWS.deliveryFee(wid, baladiya, type);
+    return BWS.deliveryFee(wid, '', type);
 }
 
 function updateSummary() {
@@ -588,30 +576,8 @@ function updateSummary() {
 function bindWilayaChange() {
     const wilSel = document.getElementById('ofWilaya');
     if (!wilSel) return;
-    const balSel = document.getElementById('ofBaladiya');
-
-    wilSel.addEventListener('change', () => {
-        populateBaladiyas(wilSel, balSel);
-        updateSummary();
-    });
-    balSel?.addEventListener('change', updateSummary);
+    wilSel.addEventListener('change', updateSummary);
     document.getElementById('ofDelivery')?.addEventListener('change', updateSummary);
-}
-
-// Fill the baladiya dropdown with the communes of the selected wilaya,
-// each shown as "post_code - name" (linked via the wilaya id).
-function populateBaladiyas(wilSel, balSel) {
-    if (!balSel) return;
-    const opt = wilSel.options[wilSel.selectedIndex];
-    const wid = opt ? opt.getAttribute('data-wid') : '';
-    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
-
-    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
-        communes.map(c => {
-            const label = (c.code ? c.code + ' - ' : '') + c.name;
-            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
-        }).join('');
-    balSel.disabled = communes.length === 0;
 }
 
 function bindSubmit() {
@@ -625,7 +591,6 @@ function bindSubmit() {
         const name = document.getElementById('ofName').value.trim();
         const phone = document.getElementById('ofPhone').value.trim();
         const wilaya = document.getElementById('ofWilaya').value;
-        const baladiya = (document.getElementById('ofBaladiya')?.value || '').trim();
         const notes = (document.getElementById('ofNotes')?.value || '').trim();
         const deliveryType = document.getElementById('ofDelivery')?.value || 'home';
 
@@ -646,7 +611,7 @@ function bindSubmit() {
         btn.textContent = 'جاري الإرسال...';
 
         const delivery = currentDeliveryFee();
-        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, baladiya, deliveryType, notes, delivery });
+        const res = await BWS.submitGuestOrder({ items, name, phone, wilaya, deliveryType, notes, delivery });
         if (res.ok) {
             document.getElementById('orderPage').innerHTML = `
                 <div class="order-success">

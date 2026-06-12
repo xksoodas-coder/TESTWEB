@@ -287,8 +287,9 @@
             <div class="admin-card">
                 <h2>أسعار التوصيل</h2>
                 <p class="muted" style="margin-bottom:14px;font-size:13px">
-                    «توصيل إلى المكتب» يحتسب سعر <b>الولاية</b>. «توصيل إلى المنزل» يحتسب سعر
-                    <b>البلدية/الدائرة</b>. يظهر سعر التوصيل للزبون العابر عند الطلب من الموقع.
+                    لكل ولاية سعران: «توصيل إلى المكتب» و«توصيل إلى المنزل»، وكلاهما
+                    <b>حسب الولاية</b> (سعر المنزل لا يعتمد على البلدية). يظهر السعر للزبون
+                    العابر مباشرةً عند اختيار الولاية ونوع التوصيل.
                 </p>
 
                 <!-- سعر المكتب (لكل ولاية) -->
@@ -302,12 +303,11 @@
                     </div>
                 </div>
 
-                <!-- سعر المنزل (لكل بلدية) -->
+                <!-- سعر المنزل (لكل ولاية) -->
                 <div style="margin-bottom:14px">
-                    <strong style="font-size:13px">سعر التوصيل إلى المنزل (حسب البلدية/الدائرة)</strong>
+                    <strong style="font-size:13px">سعر التوصيل إلى المنزل (حسب الولاية)</strong>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
-                        <select id="delHomeWilaya" class="admin-input" style="flex:1;min-width:160px"></select>
-                        <select id="delHomeBaladiya" class="admin-input" style="flex:1;min-width:160px" disabled></select>
+                        <select id="delHomeWilaya" class="admin-input" style="flex:1;min-width:180px"></select>
                         <input type="number" id="delHomePrice" class="admin-input" min="0" step="any"
                                placeholder="السعر" style="max-width:140px">
                         <button type="button" class="primary-btn" id="delHomeSave">حفظ</button>
@@ -315,6 +315,20 @@
                 </div>
 
                 <div id="delList" style="font-size:13px"></div>
+            </div>
+
+            <!-- Out-of-stock visibility -->
+            <div class="admin-card">
+                <h2>المنتجات غير المتوفرة</h2>
+                <p class="muted" style="margin-bottom:14px;font-size:13px">
+                    عند <b>التفعيل</b> تظهر المنتجات التي نفد مخزونها (0 أو أقل) في الموقع
+                    بعلامة «غير متاح». عند <b>الإطفاء</b> تُخفى تمامًا، فلا يُعرض سوى المنتجات
+                    المتوفّرة (الموقع يصبح أخفّ وأسرع لأنها لا تُحمَّل أصلًا).
+                </p>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="showOutOfStock">
+                    <span>إظهار المنتجات غير المتوفرة (كـ«غير متاح»)</span>
+                </label>
             </div>
 
             <!-- Size ordering -->

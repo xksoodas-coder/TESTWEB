@@ -380,14 +380,27 @@ function wireSettingsPage() {
         fpr7: document.getElementById('fpr7'),
         sizeOrderGuest: document.getElementById('sizeOrderGuest'),
         sizeOrderRegistered: document.getElementById('sizeOrderRegistered'),
+        showOutOfStock: document.getElementById('showOutOfStock'),
         previewMain: document.getElementById('previewMain'),
         previewDark: document.getElementById('previewDark'),
         previewLight: document.getElementById('previewLight')
     };
 
-    // أسعار التوصيل: office[wilayaId]=price ، home["wilayaId|labelالبلدية"]=price.
+    // أسعار التوصيل: office[wilayaId]=price ، home[wilayaId]=price (كلاهما لكل ولاية).
     let _delivery = { office: {}, home: {} };
     let _persistDelivery = async () => {}; // تُسنَد لاحقاً (حفظ فوري على الخادم).
+
+    // ترحيل خريطة المنزل من مفاتيح البلدية القديمة ("wid|بلدية") إلى مفاتيح الولاية
+    // ("wid")، كي تبقى الأسعار الحالية تعمل دون إعادة إدخال (آخر قيمة لكل ولاية تفوز).
+    function collapseHomeAdmin(h) {
+        const out = {};
+        if (!h || typeof h !== 'object') return out;
+        for (const k of Object.keys(h)) {
+            const wid = String(k).split('|')[0];
+            if (wid) out[wid] = Number(h[k]) || 0;
+        }
+        return out;
+    }
 
     function syncPageSizeVisibility() {
         if (!fields.pageSizeWrap) return;
@@ -440,19 +453,19 @@ function wireSettingsPage() {
         _delivery = (s.delivery && typeof s.delivery === 'object')
             ? {
                 office: { ...(s.delivery.office || {}) },
-                home: { ...(s.delivery.home || {}) }
+                home: collapseHomeAdmin(s.delivery.home)
               }
             : { office: {}, home: {} };
         renderDeliveryList();
         if (fields.sizeOrderGuest) fields.sizeOrderGuest.checked = s.sizeOrderGuest === true;
         if (fields.sizeOrderRegistered) fields.sizeOrderRegistered.checked = s.sizeOrderRegistered === true;
+        if (fields.showOutOfStock) fields.showOutOfStock.checked = s.showOutOfStock !== false;
         syncPageSizeVisibility();
         updatePreview();
     }
 
     // ── أسعار التوصيل ──
     const _wilayas = window.BWS_WILAYAS || [];
-    const _communes = window.BWS_COMMUNES || {};
     const _widName = {};
     for (const w of _wilayas) _widName[String(w.id)] = `${w.code} - ${w.name}`;
 
@@ -464,18 +477,6 @@ function wireSettingsPage() {
             _wilayas.map(w => `<option value="${w.id}">${escapeHtmlAdmin(w.code + ' - ' + w.name)}</option>`).join('');
         off.innerHTML = opts;
         homeW.innerHTML = opts;
-
-        const homeB = document.getElementById('delHomeBaladiya');
-        homeW.addEventListener('change', () => {
-            const wid = homeW.value;
-            const list = _communes[String(wid)] || [];
-            homeB.innerHTML = '<option value="">اختر البلدية / الدائرة</option>' +
-                list.map(c => {
-                    const label = (c.code ? c.code + ' - ' : '') + c.name;
-                    return `<option value="${escapeHtmlAdmin(label)}">${escapeHtmlAdmin(label)}</option>`;
-                }).join('');
-            homeB.disabled = list.length === 0;
-        });
 
         document.getElementById('delOfficeSave').addEventListener('click', () => {
             const wid = off.value;
@@ -490,11 +491,10 @@ function wireSettingsPage() {
 
         document.getElementById('delHomeSave').addEventListener('click', () => {
             const wid = homeW.value;
-            const label = homeB.value;
             const price = Number(document.getElementById('delHomePrice').value);
-            if (!wid || !label) { showToastAdmin('اختر الولاية والبلدية'); return; }
+            if (!wid) { showToastAdmin('اختر الولاية'); return; }
             if (!(price >= 0)) { showToastAdmin('أدخل سعراً صحيحاً'); return; }
-            _delivery.home[`${wid}|${label}`] = price;
+            _delivery.home[wid] = price;
             document.getElementById('delHomePrice').value = '';
             renderDeliveryList();
             _persistDelivery();
@@ -517,13 +517,11 @@ function wireSettingsPage() {
             }
         }
         if (homeKeys.length) {
-            rows.push('<div style="margin-top:10px;font-weight:700">🏠 المنزل (حسب البلدية)</div>');
-            for (const key of homeKeys) {
-                const wid = key.split('|')[0];
-                const label = key.slice(wid.length + 1);
+            rows.push('<div style="margin-top:10px;font-weight:700">🏠 المنزل (حسب الولاية)</div>');
+            for (const wid of homeKeys) {
                 rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee">
-                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} / ${escapeHtmlAdmin(label)} — <b>${_delivery.home[key]}</b> د.ج</span>
-                    <button type="button" class="ghost-btn del-rm" data-kind="home" data-key="${escapeHtmlAdmin(key)}">حذف</button>
+                    <span>${escapeHtmlAdmin(_widName[wid] || wid)} — <b>${_delivery.home[wid]}</b> د.ج</span>
+                    <button type="button" class="ghost-btn del-rm" data-kind="home" data-key="${escapeHtmlAdmin(wid)}">حذف</button>
                 </div>`);
             }
         }
@@ -572,7 +570,8 @@ function wireSettingsPage() {
             familiesPerRow: Number(document.querySelector('input[name="familiesPerRow"]:checked')?.value || 4),
             delivery: _delivery,
             sizeOrderGuest: !!fields.sizeOrderGuest?.checked,
-            sizeOrderRegistered: !!fields.sizeOrderRegistered?.checked
+            sizeOrderRegistered: !!fields.sizeOrderRegistered?.checked,
+            showOutOfStock: fields.showOutOfStock ? !!fields.showOutOfStock.checked : true
         };
     }
 

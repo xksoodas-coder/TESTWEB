@@ -52,7 +52,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error(err);
         showToast(err.message || 'تعذّر تحميل البيانات');
     }
+
+    // Warm the full catalog in the background (when the browser is idle) so that
+    // opening a category afterwards renders instantly from the client cache.
+    schedulePrefetchCatalog();
 });
+
+// Prefetch the catalog on idle (or a short timeout where requestIdleCallback is
+// unavailable, e.g. Safari). Deduped + best-effort inside prefetchCatalog().
+function schedulePrefetchCatalog() {
+    const run = () => { try { BWS.prefetchCatalog(); } catch { /* ignore */ } };
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(run, { timeout: 3000 });
+    } else {
+        setTimeout(run, 1200);
+    }
+}
 
 // ===== Store branding (logo + name in header/footer) =====
 async function applyStoreBranding() {
@@ -324,7 +339,11 @@ function wireSearchPanel() {
                 const families = await BWS.getVisibleFamilies();
                 const match = families.find(f => f.name.toLowerCase().includes(q));
                 if (match) {
-                    window.location.href = `products.html?familyId=${match.id}`;
+                    // A family with sub-families opens them; a leaf opens products.
+                    const hasKids = families.some(f => f.parentId === match.id);
+                    window.location.href = hasKids
+                        ? withTenant('categories.html?parent=' + match.id)
+                        : withTenant('products.html?familyId=' + match.id);
                 } else {
                     showToast('لم يتم العثور على نتائج.');
                 }
@@ -498,14 +517,90 @@ async function renderCategoriesGrid() {
         return;
     }
 
-    grid.innerHTML = families.map(f => `
-        <a href="products.html?familyId=${f.id}" class="category-card">
+    // Group by parent so we can show ONE level at a time. The mobile app nests
+    // families (up to 3 levels); here a main family that HAS sub-families opens
+    // them (?parent=), and a leaf family opens its products. All client-side from
+    // the already-loaded families list — no extra request, very light.
+    const childrenOf = new Map(); // parentKey (0 = root) → [family]
+    for (const f of families) {
+        const key = f.parentId == null ? 0 : f.parentId;
+        if (!childrenOf.has(key)) childrenOf.set(key, []);
+        childrenOf.get(key).push(f);
+    }
+    const hasChildren = (id) => (childrenOf.get(id) || []).length > 0;
+
+    const parentId = Number(new URLSearchParams(location.search).get('parent')) || null;
+    const level = childrenOf.get(parentId == null ? 0 : parentId) || [];
+
+    // Title + back link reflect the current level.
+    const titleEl = document.querySelector('.page-title');
+    const subEl = document.querySelector('.page-subtitle');
+    const parent = parentId != null ? families.find(f => f.id === parentId) : null;
+    if (parent) {
+        if (titleEl) titleEl.textContent = parent.name;
+        if (subEl) subEl.textContent = 'التصنيفات الفرعية';
+        setCategoriesBackLink(parent.parentId); // up one level (null → root)
+    } else {
+        if (titleEl) titleEl.textContent = 'التصنيفات';
+        if (subEl) subEl.textContent = 'جميع تصنيفات المتجر';
+        setCategoriesBackLink(undefined); // remove the back link at root
+    }
+
+    if (level.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><h2>لا توجد تصنيفات حاليًا</h2><p>الرجاء العودة لاحقًا.</p></div>';
+        return;
+    }
+
+    grid.innerHTML = level.map(f => {
+        const href = hasChildren(f.id)
+            ? categoriesHref('?parent=' + f.id)
+            : withTenant('products.html?familyId=' + f.id);
+        return `
+        <a href="${href}" class="category-card">
             <div class="category-image">
                 ${renderImageOrPlaceholder(f.imageUrl || null, f.name.charAt(0))}
             </div>
             <div class="category-name">${escapeHtml(f.name)}</div>
-        </a>
-    `).join('');
+        </a>`;
+    }).join('');
+
+    // Predictive prefetch: the moment the customer's pointer/finger reaches the
+    // categories, warm the catalog so the category they click opens instantly.
+    const warm = () => BWS.prefetchCatalog();
+    grid.addEventListener('pointerover', warm, { once: true, passive: true });
+    grid.addEventListener('touchstart', warm, { once: true, passive: true });
+}
+
+// Href to the CURRENT categories page (index.html / categories.html) carrying a
+// query, so sub-level navigation stays on the same page (and keeps the tenant).
+function categoriesHref(query) {
+    const page = (location.pathname.split('/').pop() || 'index.html');
+    return withTenant(page + query);
+}
+
+// Show/hide the "back" link in the title section.
+//   undefined → remove (we're at the root level)
+//   null      → link back to the root
+//   <id>      → link back to that ancestor level
+function setCategoriesBackLink(parentOfCurrent) {
+    const section = document.querySelector('.page-title-section');
+    let link = document.getElementById('catBackLink');
+    if (parentOfCurrent === undefined) {
+        if (link) link.remove();
+        return;
+    }
+    if (!link && section) {
+        link = document.createElement('a');
+        link.id = 'catBackLink';
+        link.className = 'back-link';
+        section.appendChild(link);
+    }
+    if (link) {
+        link.textContent = '→ رجوع';
+        link.href = (parentOfCurrent == null)
+            ? categoriesHref('')
+            : categoriesHref('?parent=' + parentOfCurrent);
+    }
 }
 
 // All-products display mode (paginated) shown on the home page.
@@ -717,16 +812,39 @@ async function renderProductsPage() {
         return;
     }
 
+    // A family that owns sub-families is a navigation node, not a product list →
+    // send the customer to its sub-categories instead of an empty product page.
+    try {
+        const fams = await BWS.getVisibleFamilies();
+        if (fams.some(f => f.parentId === family.id)) {
+            window.location.replace(withTenant('categories.html?parent=' + family.id));
+            return;
+        }
+    } catch { /* families unavailable → fall through to products */ }
+
     // Name is known instantly (families primed by bootstrap) → no title flicker.
     titleEl.textContent = family.name;
     subtitleEl.textContent = 'منتجات التصنيف';
-    await renderFamilyPaged(family, grid, emptyState);
+
+    // Instant path: if the catalog was prefetched (idle/hover), render this
+    // family's products straight from the client cache — no network. The idle
+    // prefetch keeps it fresh; falls back to the paged server fetch otherwise.
+    let localItems = null;
+    try {
+        const cached = BWS.getCachedCatalog();
+        if (cached && cached.length) {
+            const items = cached.filter(p => p.family === family.name);
+            if (items.length) localItems = items;
+        }
+    } catch { /* ignore → server fetch */ }
+
+    await renderFamilyPaged(family, grid, emptyState, localItems);
 }
 
 // Category view: load page 1 immediately (with a skeleton placeholder), then
 // auto-load further pages as the customer nears the bottom (IntersectionObserver
 // sentinel). Each page renders text-first; its images hydrate afterwards.
-async function renderFamilyPaged(family, grid, emptyState) {
+async function renderFamilyPaged(family, grid, emptyState, localItems = null) {
     const size = Math.max(12, Number(BWS.getSettings().pageSize) || 30);
     const all = [];
     let page = 1, total = 0, loading = false, done = false;
@@ -788,6 +906,16 @@ async function renderFamilyPaged(family, grid, emptyState) {
         if (loading || done) return;
         loading = true;
         if (page > 1) sentinel.textContent = 'جاري التحميل...';
+
+        // Local source: paginate the prefetched catalog in memory (instant).
+        if (localItems) {
+            total = localItems.length;
+            const start = (page - 1) * size;
+            appendPage(localItems.slice(start, start + size));
+            loading = false;
+            return;
+        }
+
         let res;
         try {
             res = await BWS.fetchProductsForFamilyPaged(family.name, { page, pageSize: size });
@@ -814,13 +942,18 @@ async function renderFamilyPaged(family, grid, emptyState) {
         observer.observe(sentinel);
     }
 
-    // Use the page bootstrap already preloaded (no extra request); else fetch it.
-    const pre = BWS.takePreloadedFamilyPage(family.id);
-    if (pre) {
-        total = pre.total;
-        appendPage(pre.products);
-    } else {
+    // Prefer the prefetched catalog (instant, local pagination); else the page
+    // bootstrap already preloaded (no extra request); else fetch the first page.
+    if (localItems) {
         await loadNext();
+    } else {
+        const pre = BWS.takePreloadedFamilyPage(family.id);
+        if (pre) {
+            total = pre.total;
+            appendPage(pre.products);
+        } else {
+            await loadNext();
+        }
     }
 }
 
@@ -1062,7 +1195,7 @@ function renderCartPage() {
     const loggedIn = session && BWS.getSessionToken();
     const isPublic = BWS.getSettings().orderMode === 'direct';
     // On a public store, a guest checks out via a quick delivery form
-    // (name/phone/wilaya/baladiya/delivery), exactly like the order page.
+    // (name/phone/wilaya/delivery), exactly like the order page.
     const guestCheckout = isPublic && !loggedIn;
     if (guestCheckout) ensureGuestCheckoutForm(summary);
     else removeGuestCheckoutForm();
@@ -1072,7 +1205,7 @@ function renderCartPage() {
         if (guestCheckout) {
             const v = id => (document.getElementById(id)?.value || '').trim();
             const name = v('ckName'), phone = v('ckPhone'), wilaya = v('ckWilaya');
-            const baladiya = v('ckBaladiya'), notes = v('ckNotes');
+            const notes = v('ckNotes');
             const deliveryType = document.getElementById('ckDelivery')?.value || 'home';
             if (!name || !phone) { showToast('الرجاء إدخال الاسم ورقم الهاتف'); return; }
             if (!wilaya) { showToast('الرجاء اختيار الولاية'); return; }
@@ -1084,7 +1217,7 @@ function renderCartPage() {
                 unitType: it.unitType || 'قطعة'
             }));
             const result = await BWS.submitGuestOrder({
-                items, name, phone, wilaya, baladiya, deliveryType, notes,
+                items, name, phone, wilaya, deliveryType, notes,
                 delivery: cartDeliveryFee()
             });
             if (result.ok) {
@@ -1147,9 +1280,6 @@ function ensureGuestCheckoutForm(summary) {
             <option value="">الولاية</option>
             ${wilayas.map(w => `<option value="${escapeHtml(w.code + ' - ' + w.name)}" data-wid="${w.id}">${escapeHtml(w.code + ' - ' + w.name)}</option>`).join('')}
         </select>
-        <select id="ckBaladiya" disabled>
-            <option value="">البلدية / الدائرة</option>
-        </select>
         <select id="ckDelivery">
             <option value="home">🏠 توصيل إلى المنزل</option>
             <option value="office">🏢 توصيل إلى المكتب</option>
@@ -1168,26 +1298,20 @@ function ensureGuestCheckoutForm(summary) {
     summary.insertBefore(form, checkoutBtn);
 
     const wilSel = document.getElementById('ckWilaya');
-    const balSel = document.getElementById('ckBaladiya');
-    wilSel.addEventListener('change', () => {
-        populateCartBaladiyas(wilSel, balSel);
-        updateCartDeliveryUI();
-    });
-    balSel.addEventListener('change', updateCartDeliveryUI);
+    wilSel.addEventListener('change', updateCartDeliveryUI);
     document.getElementById('ckDelivery').addEventListener('change', updateCartDeliveryUI);
     updateCartDeliveryUI();
 }
 
-// سعر التوصيل الحالي في السلة (حسب الولاية/البلدية ونوع التسليم).
+// سعر التوصيل الحالي في السلة (حسب الولاية ونوع التسليم؛ لكل ولاية سعرها).
 function cartDeliveryFee() {
     const wilSel = document.getElementById('ckWilaya');
     if (!wilSel) return 0;
     const opt = wilSel.options[wilSel.selectedIndex];
     const wid = opt ? (opt.getAttribute('data-wid') || '') : '';
     if (!wid) return 0;
-    const baladiya = (document.getElementById('ckBaladiya')?.value || '').trim();
     const type = document.getElementById('ckDelivery')?.value || 'home';
-    return BWS.deliveryFee(wid, baladiya, type);
+    return BWS.deliveryFee(wid, '', type);
 }
 
 function updateCartDeliveryUI() {
@@ -1200,20 +1324,6 @@ function updateCartDeliveryUI() {
 
 function removeGuestCheckoutForm() {
     document.getElementById('guestCheckoutForm')?.remove();
-}
-
-// Fill the baladiya dropdown with the communes of the selected wilaya.
-function populateCartBaladiyas(wilSel, balSel) {
-    if (!balSel) return;
-    const opt = wilSel.options[wilSel.selectedIndex];
-    const wid = opt ? opt.getAttribute('data-wid') : '';
-    const communes = (window.BWS_COMMUNES || {})[String(wid)] || [];
-    balSel.innerHTML = '<option value="">البلدية / الدائرة</option>' +
-        communes.map(c => {
-            const label = (c.code ? c.code + ' - ' : '') + c.name;
-            return `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`;
-        }).join('');
-    balSel.disabled = communes.length === 0;
 }
 
 // ===== نافذة الطلب بالأحجام =====
