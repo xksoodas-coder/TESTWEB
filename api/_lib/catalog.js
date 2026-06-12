@@ -142,11 +142,19 @@ export async function buildCatalog(client, storeId) {
             args: [storeId]
         });
         for (const r of sz.rows) {
-            let arr = [];
-            try { arr = JSON.parse(r.json_payload) || []; } catch { /* skip */ }
-            sizesByUuid[r.record_uuid] = (Array.isArray(arr) ? arr : [])
+            // Desktop/mobile emit the payload as { Rows: [{SizeName, Capacity}, ...] }
+            // (NOT a bare array) — read .Rows so the sizes aren't dropped (was the
+            // bug that made product sizes show empty on the storefront).
+            let parsed = null;
+            try { parsed = JSON.parse(r.json_payload); } catch { /* skip */ }
+            const arr = Array.isArray(parsed)
+                ? parsed
+                : (parsed && Array.isArray(parsed.Rows)) ? parsed.Rows
+                : (parsed && Array.isArray(parsed.rows)) ? parsed.rows
+                : [];
+            sizesByUuid[r.record_uuid] = arr
                 .map(s => ({
-                    name: String(s.SizeName ?? s.sizeName ?? ''),
+                    name: String(s.SizeName ?? s.sizeName ?? s.name ?? ''),
                     capacity: Number(s.Capacity ?? s.capacity ?? 0)
                 }))
                 .filter(s => s.name && s.capacity > 0);

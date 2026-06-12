@@ -490,6 +490,28 @@ img {
     min-height: 1px;
 }
 
+/* Centered circular spinner shown while a category's products load. */
+.grid-loading {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+}
+
+.bws-spinner {
+    width: 42px;
+    height: 42px;
+    border: 4px solid #e8e8ec;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: bws-spin 0.8s linear infinite;
+}
+
+@keyframes bws-spin {
+    to { transform: rotate(360deg); }
+}
+
 .product-image .category-placeholder {
     font-size: 22px;
 }

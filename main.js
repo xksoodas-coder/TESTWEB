@@ -499,7 +499,7 @@ async function renderCategoriesGrid() {
         return renderAllProductsMode(grid, BWS.getSettings().pageSize);
     }
 
-    grid.innerHTML = '<div class="empty-state"><p>جاري التحميل...</p></div>';
+    grid.innerHTML = loadingHtml();
 
     let families;
     try {
@@ -646,7 +646,7 @@ async function renderAllProductsMode(grid, pageSize) {
 
     async function loadPage(p) {
         page = p;
-        grid.innerHTML = '<div class="empty-state"><p>جاري التحميل...</p></div>';
+        grid.innerHTML = loadingHtml();
         let res;
         try {
             res = await BWS.fetchAllProducts({ page, pageSize: size });
@@ -764,16 +764,10 @@ function deferHydrate(grid) {
 }
 
 // ===== Products Page =====
-// Lightweight skeleton cards shown while a category's first page loads.
-function skeletonCards(n) {
-    let s = '';
-    for (let i = 0; i < n; i++) {
-        s += '<div class="product-card skeleton" aria-hidden="true">'
-           + '<div class="product-image sk-box"></div>'
-           + '<div class="sk-line"></div><div class="sk-line sk-short"></div>'
-           + '</div>';
-    }
-    return s;
+// A simple centered circular spinner shown while products load (cleaner than a
+// blank white area). Spans the whole grid via grid-column.
+function loadingHtml() {
+    return '<div class="grid-loading"><div class="bws-spinner"></div></div>';
 }
 
 async function renderProductsPage() {
@@ -790,7 +784,7 @@ async function renderProductsPage() {
     if (favoritesMode) {
         titleEl.textContent = 'منتجاتي المفضلة';
         subtitleEl.textContent = 'المنتجات التي أضفتها للمفضلة';
-        grid.innerHTML = skeletonCards(6);
+        grid.innerHTML = loadingHtml();
         let products;
         try {
             products = await BWS.fetchFavoriteProducts();
@@ -871,7 +865,7 @@ async function renderFamilyPaged(family, grid, emptyState, localItems = null) {
 
     grid.style.display = '';
     emptyState.style.display = 'none';
-    grid.innerHTML = skeletonCards(Math.min(size, 10));
+    grid.innerHTML = loadingHtml();
 
     // A sentinel placed after the grid; when it scrolls into view we load more.
     const section = grid.closest('.content-section') || grid.parentElement;
