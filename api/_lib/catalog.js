@@ -247,6 +247,136 @@ async function buildCatalogFromTable(client, storeId) {
     return products;
 }
 
+// ===== EXPERIMENTAL incremental projection into bws_products (staging only) =====
+// Keeps the current-state table in sync with the changelog automatically:
+//   INSERT/UPDATE → upsert the product's ONE row (newer snapshot wins by ts)
+//   DELETE        → remove the row
+//   QUANTITY_DELTA→ adjust the row's quantity (only deltas after the snapshot)
+// A per-store cursor (last processed changelog rowid) makes it process ONLY new
+// events each call — so cost stays flat no matter how big the changelog grows.
+let _productsInfraReady = false;
+async function ensureProductsTableInfra(client) {
+    if (_productsInfraReady) return;
+    await client.execute(`CREATE TABLE IF NOT EXISTS bws_products (
+        store_id TEXT NOT NULL, uuid TEXT NOT NULL, name TEXT, family TEXT,
+        quantity REAL DEFAULT 0, available INTEGER DEFAULT 0, sell_price REAL DEFAULT 0,
+        wholesale_price REAL DEFAULT 0, price3 REAL DEFAULT 0, unit_type TEXT, barcode TEXT,
+        image_version TEXT, web_visible INTEGER DEFAULT 1, last_ts TEXT, updated_at TEXT,
+        PRIMARY KEY (store_id, uuid)
+    )`);
+    // The table may pre-exist (manual load) without last_ts → add + backfill.
+    try { await client.execute(`ALTER TABLE bws_products ADD COLUMN last_ts TEXT`); } catch { /* exists */ }
+    try { await client.execute(`UPDATE bws_products SET last_ts = '' WHERE last_ts IS NULL`); } catch { /* ignore */ }
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_bws_products_family ON bws_products(store_id, family)`);
+    await client.execute(`CREATE TABLE IF NOT EXISTS bws_projection_cursor (
+        store_id TEXT PRIMARY KEY, last_rowid INTEGER DEFAULT 0, updated_at INTEGER
+    )`);
+    _productsInfraReady = true;
+}
+
+async function projectNewEvents(client, storeId) {
+    // Read (or initialise) the per-store cursor.
+    const cur = await client.execute({
+        sql: `SELECT last_rowid FROM bws_projection_cursor WHERE store_id = ?`,
+        args: [storeId]
+    });
+    let lastRowid;
+    if (cur.rows.length) {
+        lastRowid = Number(cur.rows[0].last_rowid) || 0;
+    } else {
+        // First run: the table was already loaded (manual), so skip history and
+        // start from the current max rowid → only future edits are projected.
+        const mx = await client.execute({
+            sql: `SELECT COALESCE(MAX(rowid), 0) AS m FROM turso_changelog
+                  WHERE store_id = ? AND table_name = 'Products'`,
+            args: [storeId]
+        });
+        lastRowid = Number(mx.rows[0].m) || 0;
+        await client.execute({
+            sql: `INSERT OR REPLACE INTO bws_projection_cursor (store_id, last_rowid, updated_at) VALUES (?, ?, ?)`,
+            args: [storeId, lastRowid, Date.now()]
+        });
+        return;
+    }
+
+    const ev = await client.execute({
+        sql: `SELECT rowid AS rid, record_uuid, operation, json_payload, timestamp
+              FROM turso_changelog
+              WHERE store_id = ? AND table_name = 'Products' AND rowid > ?
+              ORDER BY rowid ASC LIMIT 5000`,
+        args: [storeId, lastRowid]
+    });
+    if (!ev.rows.length) return;
+
+    const stmts = [];
+    let maxRowid = lastRowid;
+    for (const r of ev.rows) {
+        const rid = Number(r.rid);
+        if (rid > maxRowid) maxRowid = rid;
+        const op = r.operation;
+        const ts = (r.timestamp || '').toString();
+        const uuid = r.record_uuid;
+
+        if (op === 'DELETE') {
+            stmts.push({
+                sql: `DELETE FROM bws_products
+                      WHERE store_id = ? AND uuid = ? AND COALESCE(last_ts,'') <= ?`,
+                args: [storeId, uuid, ts]
+            });
+        } else if (op === 'QUANTITY_DELTA') {
+            let delta = 0;
+            try { delta = Number(JSON.parse(r.json_payload).totalQuantityDelta || 0); } catch { /* skip */ }
+            if (delta !== 0) {
+                stmts.push({
+                    sql: `UPDATE bws_products
+                          SET quantity = quantity + ?,
+                              available = CASE WHEN quantity + ? > 0 THEN 1 ELSE 0 END,
+                              updated_at = ?
+                          WHERE store_id = ? AND uuid = ? AND COALESCE(last_ts,'') < ?`,
+                    args: [delta, delta, ts, storeId, uuid, ts]
+                });
+            }
+        } else {
+            // INSERT / UPDATE — a full snapshot.
+            let d = null;
+            try { d = JSON.parse(r.json_payload); } catch { /* skip */ }
+            if (d) {
+                const qty = Number(d.totalQuantity ?? 0);
+                const hidden = d.webVisible === false ? 0 : 1;
+                stmts.push({
+                    sql: `INSERT INTO bws_products
+                            (store_id, uuid, name, family, quantity, available, sell_price,
+                             wholesale_price, price3, unit_type, barcode, image_version,
+                             web_visible, last_ts, updated_at)
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                          ON CONFLICT(store_id, uuid) DO UPDATE SET
+                            name=excluded.name, family=excluded.family, quantity=excluded.quantity,
+                            available=excluded.available, sell_price=excluded.sell_price,
+                            wholesale_price=excluded.wholesale_price, price3=excluded.price3,
+                            unit_type=excluded.unit_type, barcode=excluded.barcode,
+                            image_version=excluded.image_version, web_visible=excluded.web_visible,
+                            last_ts=excluded.last_ts, updated_at=excluded.updated_at
+                          WHERE excluded.last_ts >= COALESCE(bws_products.last_ts,'')`,
+                    args: [storeId, uuid, d.name ?? '', String(d.family ?? '').trim(),
+                           qty, qty > 0 ? 1 : 0, Number(d.sellPrice ?? 0),
+                           Number(d.wholesalePrice ?? 0), Number(d.price3 ?? 0),
+                           d.unitType ?? 'قطعة', d.barcode ?? '', d.imageVersion ?? '',
+                           hidden, ts, ts]
+                });
+            }
+        }
+    }
+
+    stmts.push({
+        sql: `INSERT INTO bws_projection_cursor (store_id, last_rowid, updated_at)
+              VALUES (?, ?, ?)
+              ON CONFLICT(store_id) DO UPDATE SET last_rowid=excluded.last_rowid, updated_at=excluded.updated_at`,
+        args: [storeId, maxRowid, Date.now()]
+    });
+
+    await client.batch(stmts, 'write');
+}
+
 /**
  * Return the store's catalog (array of shaped products) using the snapshot
  * cache. Rebuilds from the changelog only when the snapshot is missing or
@@ -263,8 +393,12 @@ export async function getCatalog(client, storeId, { force = false } = {}) {
         if (mem && (Date.now() - mem.at) < MEM_TTL_MS) return mem.products;
     }
 
-    // EXPERIMENTAL (staging only): read the current-state products table.
+    // EXPERIMENTAL (staging only): auto-project new changelog events into the
+    // current-state table, then read straight from it.
     if (process.env.USE_PRODUCTS_TABLE === '1') {
+        await ensureProductsTableInfra(client);
+        try { await projectNewEvents(client, storeId); }
+        catch (e) { console.error('[projection] error', e); }
         const products = await buildCatalogFromTable(client, storeId);
         _memCatalog.set(storeId, { at: Date.now(), products });
         return products;
