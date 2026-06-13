@@ -207,6 +207,47 @@ export async function buildCatalog(client, storeId) {
 }
 
 /**
+ * EXPERIMENTAL read model: build the catalog straight from the `bws_products`
+ * current-state table (one shaped row per product) instead of reducing the
+ * changelog. Enabled per-deployment via env USE_PRODUCTS_TABLE=1 — so it only
+ * runs on the staging site, never in production.
+ */
+async function buildCatalogFromTable(client, storeId) {
+    const r = await client.execute({
+        sql: `SELECT uuid, name, family, quantity, available, sell_price,
+                     wholesale_price, price3, unit_type, barcode, image_version
+              FROM bws_products
+              WHERE store_id = ? AND web_visible = 1`,
+        args: [storeId]
+    });
+    const products = r.rows.map(row => {
+        const price1 = Number(row.sell_price ?? 0);
+        const imageVersion = String(row.image_version ?? '');
+        const qty = Number(row.quantity ?? 0);
+        return {
+            uuid: row.uuid,
+            id: null,
+            name: row.name ?? '',
+            family: (row.family ?? '').toString().trim(),
+            price: price1,
+            price1,
+            price2: Number(row.wholesale_price ?? 0),
+            price3: Number(row.price3 ?? 0),
+            price4: 0, price5: 0, price6: 0, price7: 0,
+            quantity: qty,
+            available: Number(row.available) === 1,
+            unitType: row.unit_type ?? 'قطعة',
+            imageVersion,
+            imageUrl: imageVersion ? productImageUrl(row.uuid, imageVersion) : '',
+            barcode: row.barcode ?? '',
+            sizes: []
+        };
+    });
+    products.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    return products;
+}
+
+/**
  * Return the store's catalog (array of shaped products) using the snapshot
  * cache. Rebuilds from the changelog only when the snapshot is missing or
  * older than CATALOG_TTL_MS. On a rebuild failure, falls back to the stale
@@ -220,6 +261,13 @@ export async function getCatalog(client, storeId, { force = false } = {}) {
     if (!force) {
         const mem = _memCatalog.get(storeId);
         if (mem && (Date.now() - mem.at) < MEM_TTL_MS) return mem.products;
+    }
+
+    // EXPERIMENTAL (staging only): read the current-state products table.
+    if (process.env.USE_PRODUCTS_TABLE === '1') {
+        const products = await buildCatalogFromTable(client, storeId);
+        _memCatalog.set(storeId, { at: Date.now(), products });
+        return products;
     }
 
     await ensureCatalogInfra(client);
